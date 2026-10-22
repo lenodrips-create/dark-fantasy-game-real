@@ -151,18 +151,20 @@ static void PushApart(Player *mover, float moverRadius, const Player *other, flo
     mover->position.z += offset.y/distance*overlap;
 }
 
-// The hooded figure walks on its two thin legs, rocking side to side with each step
+// The hooded figure walks on its two thin legs, swinging its arms against them
 static void DrawHoodedFigure(const Wanderer *figure, const World *world)
 {
     if (!world->hasActor) return;
 
     const Player *body = &figure->body;
     float swing = body->stride;
-    float legSwing = sinf(body->walkPhase)*swing*0.9f;
-    float bob = -(1.0f - cosf(legSwing))*0.3f;     // Hips dip a little as the legs spread
+    float legSwing = sinf(body->walkPhase)*swing*1.45f;
+    float bob = fabsf(sinf(legSwing))*0.2f;      // Its long feet tip down as a leg swings back, so lift it to keep the toes up
     float lean = swing*0.12f;
     float roll = sinf(body->walkPhase)*0.06f*swing;
-    WorldDrawActor(world, (Vector3){ body->position.x, body->position.y + bob, body->position.z }, body->yaw, lean, roll, legSwing, -legSwing);
+    // The staff hand (right) swings less so the staff doesn't flail
+    float limbs[ACTOR_LIMBS] = { legSwing, -legSwing, -legSwing*0.6f, legSwing*0.35f };
+    WorldDrawActor(world, (Vector3){ body->position.x, body->position.y + bob, body->position.z }, body->yaw, lean, roll, limbs);
     PlayerDrawShadow(body, 0.8f);
 }
 

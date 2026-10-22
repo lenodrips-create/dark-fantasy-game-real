@@ -13,7 +13,7 @@
 #define TURN_RATE      12.0f
 #define FALL_LIMIT     -60.0f   // Respawn if we ever drop out of the world
 
-#define STRIDE_RATE    2.2f     // Default walk cycle radians per unit travelled: one step covers about 1.4 units
+#define STRIDE_RATE    1.7f     // Default walk cycle radians per unit travelled: one step covers about 1.85 units
 
 void PlayerInit(Player *player, const World *world, Vector3 spawn, float yaw)
 {

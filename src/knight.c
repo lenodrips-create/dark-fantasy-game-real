@@ -134,7 +134,7 @@ static void PoseParts(const Player *player, Matrix *parts)
     for (int i = 0; i < 2; i++)
     {
         float p = phase + i*PI;
-        thigh[i] = sinf(p)*swing*1.5f;
+        thigh[i] = sinf(p)*fminf(swing*1.8f, 1.0f);
         knee[i] = swing*(0.3f + 1.6f*fmaxf(0.0f, cosf(p)));
         if (!player->grounded)
         {
@@ -148,8 +148,8 @@ static void PoseParts(const Player *player, Matrix *parts)
     float bounce = reach - (THIGH_LENGTH + SHIN_LENGTH) + breathe;
 
     float lean = swing*0.45f;
-    // The upper body swings with every step: shoulders turn against the hips and rock side to side
-    float roll = sinf(phase)*swing*0.25f;
+    // The upper body swings with every step: shoulders turn against the hips, without rocking side to side
+    float roll = 0.0f;
     float twist = sinf(phase)*swing*0.55f;
 
     Matrix pelvis = MatrixTranslate(0.0f, bounce, 0.0f);

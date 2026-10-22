@@ -11,6 +11,8 @@
 #define GRID_CELL_SIZE 8.0f     // Collision grid cell size in world units
 #define GRID_MAX_CELLS 512      // Per axis; cells get bigger on huge maps instead
 #define ACTOR_LEG_TOP  0.2f     // Fraction of the actor's height where its legs meet the robe
+#define ACTOR_ARM_OUT  0.18f    // Arms (sleeves, hands, whatever they hold) reach further out than this fraction of the height
+#define ACTOR_ARM_TOP  0.63f    // and sit below this fraction of the height
 
 // Moonlight for the dark fantasy look
 static const Vector3 LIGHT_DIR    = { -0.35f, -0.85f, 0.40f };  // Direction the moonlight travels
@@ -264,15 +266,16 @@ static void BuildCollisionGrid(World *world, const bool *alphaMaterial)
     free(fill);
 }
 
-// Finds the actor's feet and splits off its legs: everything below ACTOR_LEG_TOP of its height,
-// left or right of the middle. The middle line itself (the front tip of the hooded figure's robe) stays put.
-static void SetupActorLegs(World *world)
+// Finds the actor's feet and splits off its limbs. Legs: everything below ACTOR_LEG_TOP of its height, left or
+// right of the middle; the middle line itself (the front tip of the hooded figure's robe) stays put.
+// Arms: everything further out to the side than ACTOR_ARM_OUT, between the legs and ACTOR_ARM_TOP.
+static void SetupActorLimbs(World *world)
 {
     const Mesh *mesh = &world->model.meshes[world->actorMesh];
     int count = mesh->vertexCount;
     world->actorRestPositions = malloc(count*3*sizeof(float));
     world->actorRestNormals = malloc(count*3*sizeof(float));
-    world->actorLeg = calloc(count, sizeof(signed char));
+    world->actorLimb = calloc(count, sizeof(signed char));
     memcpy(world->actorRestPositions, mesh->vertices, count*3*sizeof(float));
     if (mesh->normals != NULL) memcpy(world->actorRestNormals, mesh->normals, count*3*sizeof(float));
     else memset(world->actorRestNormals, 0, count*3*sizeof(float));
@@ -292,23 +295,35 @@ static void SetupActorLegs(World *world)
     else feet = Vector3Scale(feet, 1.0f/feetCount);
     world->actorOrigin = (Vector3){ feet.x, box.min.y, feet.z };
 
-    // Hips: the top of each leg, at the middle of its upper part
+    // Joints: hips at the top middle of each leg, shoulders at the top of the part of each arm nearest the body
     float legTop = box.min.y + height*ACTOR_LEG_TOP;
-    Vector3 hipSum[2] = { 0 };
-    int hipCount[2] = { 0 };
+    float armTop = box.min.y + height*ACTOR_ARM_TOP;
+    Vector3 jointSum[ACTOR_LIMBS] = { 0 };
+    int jointCount[ACTOR_LIMBS] = { 0 };
+    float shoulderY[2] = { legTop, legTop };
     for (int i = 0; i < count; i++)
     {
         Vector3 p = { mesh->vertices[i*3], mesh->vertices[i*3 + 1], mesh->vertices[i*3 + 2] };
         float side = p.x - feet.x;
-        if ((p.y >= legTop) || (fabsf(side) < 0.05f)) continue;
-        int leg = (side > 0.0f)? 0 : 1;
-        world->actorLeg[i] = (signed char)(leg + 1);
-        if (p.y > legTop - height*0.08f) { hipSum[leg] = Vector3Add(hipSum[leg], p); hipCount[leg]++; }
+        int limb = -1;
+        if ((p.y < legTop) && (fabsf(side) >= 0.05f)) limb = (side > 0.0f)? ACTOR_LEG_LEFT : ACTOR_LEG_RIGHT;
+        else if ((p.y < armTop) && (fabsf(side) > height*ACTOR_ARM_OUT)) limb = (side > 0.0f)? ACTOR_ARM_LEFT : ACTOR_ARM_RIGHT;
+        if (limb < 0) continue;
+        world->actorLimb[i] = (signed char)(limb + 1);
+
+        bool nearJoint = (limb <= ACTOR_LEG_RIGHT)? (p.y > legTop - height*0.08f) : (fabsf(side) < height*(ACTOR_ARM_OUT + 0.06f));
+        if (nearJoint)
+        {
+            jointSum[limb] = Vector3Add(jointSum[limb], p);
+            jointCount[limb]++;
+            if (limb >= ACTOR_ARM_LEFT) shoulderY[limb - ACTOR_ARM_LEFT] = fmaxf(shoulderY[limb - ACTOR_ARM_LEFT], p.y);
+        }
     }
-    for (int leg = 0; leg < 2; leg++)
+    for (int limb = 0; limb < ACTOR_LIMBS; limb++)
     {
-        Vector3 hip = (hipCount[leg] > 0)? Vector3Scale(hipSum[leg], 1.0f/hipCount[leg]) : feet;
-        world->actorHip[leg] = (Vector3){ hip.x, legTop, hip.z };
+        Vector3 joint = (jointCount[limb] > 0)? Vector3Scale(jointSum[limb], 1.0f/jointCount[limb]) : feet;
+        joint.y = (limb <= ACTOR_LEG_RIGHT)? legTop : shoulderY[limb - ACTOR_ARM_LEFT];
+        world->actorJoint[limb] = joint;
     }
 }
 
@@ -371,7 +386,7 @@ bool WorldLoad(World *world, const char *path, const char *skyPath, const char *
             break;
         }
     }
-    if (world->hasActor) SetupActorLegs(world);
+    if (world->hasActor) SetupActorLimbs(world);
 
     BuildCollisionGrid(world, alphaMaterial);
     free(alphaMaterial);
@@ -400,7 +415,7 @@ void WorldUnload(World *world)
     free(world->isActor);
     free(world->actorRestPositions);
     free(world->actorRestNormals);
-    free(world->actorLeg);
+    free(world->actorLimb);
     free(world->triangles);
     free(world->cellStart);
     free(world->cellItems);
@@ -429,30 +444,29 @@ void WorldDraw(const World *world, Camera3D camera)
     rlEnableBackfaceCulling();
 }
 
-void WorldDrawActor(const World *world, Vector3 position, float yaw, float lean, float roll, float leftLeg, float rightLeg)
+void WorldDrawActor(const World *world, Vector3 position, float yaw, float lean, float roll, const float limbSwing[ACTOR_LIMBS])
 {
     if (!world->hasActor) return;
 
-    // Swing each leg around its hip; it faces +Z, so forward is a negative turn around X
+    // Swing each limb around its joint; it faces +Z, so forward is a negative turn around X
     Mesh *mesh = &world->model.meshes[world->actorMesh];
-    Matrix legs[2];
-    float swings[2] = { leftLeg, rightLeg };
-    for (int leg = 0; leg < 2; leg++)
+    Matrix limbs[ACTOR_LIMBS];
+    for (int limb = 0; limb < ACTOR_LIMBS; limb++)
     {
-        Vector3 hip = world->actorHip[leg];
-        legs[leg] = MatrixMultiply(MatrixMultiply(MatrixTranslate(-hip.x, -hip.y, -hip.z), MatrixRotateX(-swings[leg])), MatrixTranslate(hip.x, hip.y, hip.z));
+        Vector3 j = world->actorJoint[limb];
+        limbs[limb] = MatrixMultiply(MatrixMultiply(MatrixTranslate(-j.x, -j.y, -j.z), MatrixRotateX(-limbSwing[limb])), MatrixTranslate(j.x, j.y, j.z));
     }
     for (int i = 0; i < mesh->vertexCount; i++)
     {
-        int leg = world->actorLeg[i] - 1;
-        if (leg < 0) continue;
-        Vector3 p = Vector3Transform((Vector3){ world->actorRestPositions[i*3], world->actorRestPositions[i*3 + 1], world->actorRestPositions[i*3 + 2] }, legs[leg]);
+        int limb = world->actorLimb[i] - 1;
+        if (limb < 0) continue;
+        Vector3 p = Vector3Transform((Vector3){ world->actorRestPositions[i*3], world->actorRestPositions[i*3 + 1], world->actorRestPositions[i*3 + 2] }, limbs[limb]);
         mesh->vertices[i*3] = p.x;
         mesh->vertices[i*3 + 1] = p.y;
         mesh->vertices[i*3 + 2] = p.z;
         if (mesh->normals != NULL)
         {
-            Matrix r = legs[leg];
+            Matrix r = limbs[limb];
             Vector3 n = { world->actorRestNormals[i*3], world->actorRestNormals[i*3 + 1], world->actorRestNormals[i*3 + 2] };
             mesh->normals[i*3] = r.m0*n.x + r.m4*n.y + r.m8*n.z;
             mesh->normals[i*3 + 1] = r.m1*n.x + r.m5*n.y + r.m9*n.z;

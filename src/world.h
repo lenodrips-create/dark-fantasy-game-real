@@ -4,6 +4,9 @@
 #include "raylib.h"
 #include <stdbool.h>
 
+// The actor's limbs, in the order WorldDrawActor() takes their swing angles
+enum { ACTOR_LEG_LEFT, ACTOR_LEG_RIGHT, ACTOR_ARM_LEFT, ACTOR_ARM_RIGHT, ACTOR_LIMBS };
+
 // Background behind the sky image, close to its darkest purple
 #define WORLD_SKY_COLOR (Color){ 14, 6, 34, 255 }
 
@@ -22,8 +25,8 @@ typedef struct World {
     Vector3 actorOrigin;    // Where it stood in the map, between its feet
     float *actorRestPositions;
     float *actorRestNormals;
-    signed char *actorLeg;  // Per vertex: 0 body, 1 left leg, 2 right leg
-    Vector3 actorHip[2];    // Left, right
+    signed char *actorLimb; // Per vertex: 0 body, otherwise limb + 1
+    Vector3 actorJoint[ACTOR_LIMBS];    // Hips and shoulders
 
     // Collision: world-space triangles (raylib bakes the Blender node transforms into the meshes)
     // bucketed into a grid over the ground plane. Foliage is left out so leaves never block anything.
@@ -43,8 +46,8 @@ void WorldUnload(World *world);
 void WorldDraw(const World *world, Camera3D camera);
 
 // Draws the actor standing at position, facing yaw (it faces +Z in the map), tilted by lean and roll,
-// each leg swung forward by its angle in radians
-void WorldDrawActor(const World *world, Vector3 position, float yaw, float lean, float roll, float leftLeg, float rightLeg);
+// each limb swung forward by its angle in radians
+void WorldDrawActor(const World *world, Vector3 position, float yaw, float lean, float roll, const float limbSwing[ACTOR_LIMBS]);
 
 // Closest solid hit along the ray, up to maxDistance.
 RayCollision WorldRaycast(const World *world, Ray ray, float maxDistance);

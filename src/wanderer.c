@@ -3,7 +3,7 @@
 #include "raymath.h"
 
 #define STROLL       0.175f // Fraction of walking speed
-#define STRIDE_RATE  5.0f   // Its legs are short, so it takes small steps
+#define STRIDE_RATE  7.0f   // Its legs are short, so it takes small, quick steps
 #define ARRIVED      0.5f   // Close enough to the destination, in world units
 #define GIVE_UP_TIME 1.0f   // Pick somewhere else after this long blocked (a gravestone, a tree)
 
