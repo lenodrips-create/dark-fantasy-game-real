@@ -151,17 +151,18 @@ static void PushApart(Player *mover, float moverRadius, const Player *other, flo
     mover->position.z += offset.y/distance*overlap;
 }
 
-// The hooded figure has no legs, so it glides: a bob and a sway in time with its steps, and a slow hover
+// The hooded figure walks on its two thin legs, rocking side to side with each step
 static void DrawHoodedFigure(const Wanderer *figure, const World *world)
 {
     if (!world->hasActor) return;
 
     const Player *body = &figure->body;
     float swing = body->stride;
-    float bob = fabsf(sinf(body->walkPhase))*0.08f*swing + (sinf((float)GetTime()*1.5f) + 1.0f)*0.04f;
-    float lean = swing*0.15f;
-    float roll = sinf(body->walkPhase)*0.08f*swing;
-    WorldDrawActor(world, (Vector3){ body->position.x, body->position.y + bob, body->position.z }, body->yaw, lean, roll);
+    float legSwing = sinf(body->walkPhase)*swing*0.9f;
+    float bob = -(1.0f - cosf(legSwing))*0.3f;     // Hips dip a little as the legs spread
+    float lean = swing*0.12f;
+    float roll = sinf(body->walkPhase)*0.06f*swing;
+    WorldDrawActor(world, (Vector3){ body->position.x, body->position.y + bob, body->position.z }, body->yaw, lean, roll, legSwing, -legSwing);
     PlayerDrawShadow(body, 0.8f);
 }
 

@@ -19,6 +19,7 @@ typedef struct Player {
     bool grounded;
     bool sprinting;
     float walkPhase;    // Advances with distance travelled, drives the walk cycle
+    float strideRate;   // Walk cycle radians per unit travelled: lower means longer, slower steps
     float stride;       // Smoothed swing amplitude: 0 standing still, larger when sprinting
 } Player;
 

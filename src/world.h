@@ -18,7 +18,12 @@ typedef struct World {
     // The actor: meshes lifted out of the level so they can walk around (the hooded figure)
     bool *isActor;          // Per mesh
     bool hasActor;
-    Vector3 actorOrigin;    // Where it stood in the map, at its feet
+    int actorMesh;
+    Vector3 actorOrigin;    // Where it stood in the map, between its feet
+    float *actorRestPositions;
+    float *actorRestNormals;
+    signed char *actorLeg;  // Per vertex: 0 body, 1 left leg, 2 right leg
+    Vector3 actorHip[2];    // Left, right
 
     // Collision: world-space triangles (raylib bakes the Blender node transforms into the meshes)
     // bucketed into a grid over the ground plane. Foliage is left out so leaves never block anything.
@@ -37,8 +42,9 @@ void WorldUnload(World *world);
 // Draws the sky and the level; call first inside BeginMode3D()
 void WorldDraw(const World *world, Camera3D camera);
 
-// Draws the actor standing at position, facing yaw (it faces +Z in the map), tilted by lean and roll
-void WorldDrawActor(const World *world, Vector3 position, float yaw, float lean, float roll);
+// Draws the actor standing at position, facing yaw (it faces +Z in the map), tilted by lean and roll,
+// each leg swung forward by its angle in radians
+void WorldDrawActor(const World *world, Vector3 position, float yaw, float lean, float roll, float leftLeg, float rightLeg);
 
 // Closest solid hit along the ray, up to maxDistance.
 RayCollision WorldRaycast(const World *world, Ray ray, float maxDistance);

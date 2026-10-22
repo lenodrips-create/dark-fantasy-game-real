@@ -134,7 +134,7 @@ static void PoseParts(const Player *player, Matrix *parts)
     for (int i = 0; i < 2; i++)
     {
         float p = phase + i*PI;
-        thigh[i] = sinf(p)*swing*1.3f;
+        thigh[i] = sinf(p)*swing*1.5f;
         knee[i] = swing*(0.3f + 1.6f*fmaxf(0.0f, cosf(p)));
         if (!player->grounded)
         {
@@ -148,8 +148,9 @@ static void PoseParts(const Player *player, Matrix *parts)
     float bounce = reach - (THIGH_LENGTH + SHIN_LENGTH) + breathe;
 
     float lean = swing*0.45f;
-    float roll = sinf(phase)*swing*0.12f;
-    float twist = sinf(phase)*swing*0.2f;
+    // The upper body swings with every step: shoulders turn against the hips and rock side to side
+    float roll = sinf(phase)*swing*0.25f;
+    float twist = sinf(phase)*swing*0.55f;
 
     Matrix pelvis = MatrixTranslate(0.0f, bounce, 0.0f);
     Matrix torsoRotation = MatrixMultiply(MatrixMultiply(MatrixRotateY(twist), MatrixRotateZ(roll)), MatrixRotateX(lean));
@@ -165,7 +166,7 @@ static void PoseParts(const Player *player, Matrix *parts)
 
         // Arms pump against the leg on the same side. The right hand holds the halberd,
         // so that arm moves much less to keep the weapon roughly level.
-        float armSwing = left? -thigh[i]*0.9f : -thigh[i]*0.25f;
+        float armSwing = left? -thigh[i]*0.9f : -thigh[i]*0.35f;
         float elbowBend = left? 0.3f + swing*1.2f : 0.1f + swing*0.2f;
         if (!player->grounded)
         {

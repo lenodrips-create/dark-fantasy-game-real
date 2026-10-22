@@ -2,7 +2,8 @@
 
 #include "raymath.h"
 
-#define STROLL       0.35f  // Fraction of walking speed
+#define STROLL       0.175f // Fraction of walking speed
+#define STRIDE_RATE  5.0f   // Its legs are short, so it takes small steps
 #define ARRIVED      0.5f   // Close enough to the destination, in world units
 #define GIVE_UP_TIME 1.0f   // Pick somewhere else after this long blocked (a gravestone, a tree)
 
@@ -23,6 +24,7 @@ void WandererInit(Wanderer *wanderer, const World *world, Vector3 start, Rectang
     *wanderer = (Wanderer){ 0 };
     wanderer->area = area;
     PlayerInit(&wanderer->body, world, start, 0.0f);
+    wanderer->body.strideRate = STRIDE_RATE;
     PickTarget(wanderer);
 }
 

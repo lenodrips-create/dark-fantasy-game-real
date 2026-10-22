@@ -13,13 +13,14 @@
 #define TURN_RATE      12.0f
 #define FALL_LIMIT     -60.0f   // Respawn if we ever drop out of the world
 
-#define STRIDE_RATE    3.1f     // Walk cycle radians per unit travelled: one step covers about a unit
+#define STRIDE_RATE    2.2f     // Default walk cycle radians per unit travelled: one step covers about 1.4 units
 
 void PlayerInit(Player *player, const World *world, Vector3 spawn, float yaw)
 {
     *player = (Player){ 0 };
     player->spawn = spawn;
     player->spawnYaw = yaw;
+    player->strideRate = STRIDE_RATE;
     PlayerRespawn(player, world);
 }
 
@@ -130,7 +131,7 @@ void PlayerUpdate(Player *player, const World *world, Vector3 move, bool sprint,
 
     // Walk cycle follows the distance actually covered, so legs don't run in place against walls
     float moved = Vector2Length((Vector2){ player->position.x - start.x, player->position.z - start.z });
-    player->walkPhase = fmodf(player->walkPhase + moved*STRIDE_RATE, 2.0f*PI);
+    player->walkPhase = fmodf(player->walkPhase + moved*player->strideRate, 2.0f*PI);
     float targetStride = (moved > 0.0001f)? (player->sprinting? 0.8f : 0.55f) : 0.0f;
     player->stride += (targetStride - player->stride)*fminf(1.0f, 10.0f*dt);
 }
