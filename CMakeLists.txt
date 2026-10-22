@@ -32,8 +32,10 @@ if(NOT raylib_FOUND)
 endif()
 
 add_executable(dark_fantasy
+    src/knight.c
     src/main.c
     src/player.c
+    src/wanderer.c
     src/world.c
 )
 target_link_libraries(dark_fantasy PRIVATE raylib)
@@ -51,7 +53,7 @@ endif()
 
 if(EMSCRIPTEN)
     # Writes web/dark_fantasy.js and web/dark_fantasy.wasm, which index.html loads.
-    # index.html downloads levels/GroundWithHills.glb itself, so map changes need no rebuild.
+    # index.html downloads levels/ and characters/ itself, so swapping those files needs no rebuild.
     set_target_properties(dark_fantasy PROPERTIES
         SUFFIX ".js"
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/web
@@ -66,10 +68,13 @@ if(EMSCRIPTEN)
         -sEXPORTED_RUNTIME_METHODS=FS,addRunDependency,removeRunDependency
     )
 else()
-    # The game loads levels/ relative to itself, so keep a copy next to the executable
+    # The game loads levels/ and characters/ relative to itself, so keep copies next to the executable
     add_custom_command(TARGET dark_fantasy POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_CURRENT_SOURCE_DIR}/levels
             $<TARGET_FILE_DIR:dark_fantasy>/levels
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/characters
+            $<TARGET_FILE_DIR:dark_fantasy>/characters
     )
 endif()

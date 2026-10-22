@@ -25,8 +25,14 @@
   <div id="bar"><div id="fill"></div></div>
 </div>
 <script>
-  // Files the game reads from levels/, the same as the desktop version
-  var FILES = ['levels/GroundWithHills.glb', 'levels/sky.jpg'];
+  // Files the game reads, the same as the desktop version
+  var FILES = [
+    'levels/GroundWithHills.glb',
+    'levels/sky.jpg',
+    'characters/Armor_Halberd.obj',
+    'characters/Armor_Halberd.mtl',
+    'characters/Armor_Halberd.png'
+  ];
   var canvas = document.getElementById('canvas');
   var loadingEl = document.getElementById('loading');
   var statusEl = document.getElementById('status');
@@ -38,7 +44,7 @@
     loadingEl.style.display = 'flex';
   }
 
-  // Downloads the map and sky with a progress bar. They're read from levels/ like on desktop,
+  // Downloads the map, sky and knight with a progress bar. They're read from the same folders as on desktop,
   // so replacing them in the repository updates the web game too.
   function downloadFiles() {
     var totals = FILES.map(function () { return 0; });
@@ -84,6 +90,7 @@
         statusEl.textContent = 'Starting...';
         fillEl.style.width = '100%';
         Module.FS.mkdir('/levels');
+        Module.FS.mkdir('/characters');
         files.forEach(function (data, i) { Module.FS.writeFile('/' + FILES[i], data); });
         Module.removeRunDependency('files');
       }).catch(function (error) {

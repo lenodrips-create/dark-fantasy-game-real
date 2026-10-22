@@ -1,6 +1,6 @@
 # Dark Fantasy Game
 
-A third-person prototype written in C with [raylib](https://www.raylib.com/). You play a stickman who starts in the graveyard of the Blender map `levels/GroundWithHills.glb` and can walk out through the canyon, across the field and up to the village.
+A third-person prototype written in C with [raylib](https://www.raylib.com/). You play an armored knight with a halberd who starts in the graveyard of the Blender map `levels/GroundWithHills.glb` and can walk out through the canyon, across the field and up to the village. A stickman wanders around the graveyard.
 
 **Play it in your browser:** https://lenodrips-create.github.io/dark-fantasy-game-real/ (click the game to grab the mouse)
 
@@ -40,7 +40,7 @@ The build copies `levels/` next to the executable, so you can also start the gam
 
 ### Web version
 
-The browser version is the same C code compiled to WebAssembly with [Emscripten](https://emscripten.org/docs/getting_started/downloads.html). GitHub Pages serves `index.html`, which loads `web/dark_fantasy.js` + `web/dark_fantasy.wasm` and downloads the map and sky from `levels/`.
+The browser version is the same C code compiled to WebAssembly with [Emscripten](https://emscripten.org/docs/getting_started/downloads.html). GitHub Pages serves `index.html`, which loads `web/dark_fantasy.js` + `web/dark_fantasy.wasm` and downloads the map and sky from `levels/` and the knight from `characters/`.
 
 After changing the C code, rebuild the web files and commit them:
 
@@ -49,7 +49,7 @@ emcmake cmake -S . -B build-web
 cmake --build build-web
 ```
 
-This writes straight into `web/`. Replacing the map or sky in `levels/` needs no rebuild, the web version picks them up on the next page load.
+This writes straight into `web/`. Replacing files in `levels/` or `characters/` needs no rebuild, the web version picks them up on the next page load (a new file name needs adding to the list in `index.html`).
 
 ## Changing the map
 
@@ -60,6 +60,12 @@ Export from Blender with **File > Export > glTF 2.0**, format **glTF Binary (.gl
 - The spawn point is `SPAWN_POINT` at the top of `src/main.c`. It's currently the middle aisle of the graveyard, facing north toward the cliff gap.
 - The graveyard in `levels/GroundWithHills.glb` was widened after export (ground 28 units across instead of 14, cliffs moved out to match, graves and trees spread out). Your Blender file doesn't have that change, so a fresh export brings back the narrow graveyard unless you widen it in Blender too.
 
+## Characters
+
+- **The knight** (`characters/Armor_Halberd.obj`, textured by `Armor_Halberd.png` through `Armor_Halberd.mtl`) is scaled to the stickman's height, 1.4 units. The model has no skeleton, so `src/knight.c` splits its vertices into torso, thighs, shins, upper arms and forearms (the halberd goes with the right hand) and poses them with joint rotations every frame, the way N64-era characters were animated. The split and the joint positions are measured from this model, so a different model needs new numbers there.
+- **The walk** is modeled on Banjo's run in Banjo-Kazooie (Mumbo's Mountain): a forward lean, big quick strides with a high knee lift and a kick back, bent arms pumping against the legs, a bounce on every step and a side-to-side roll. The halberd arm moves less so the weapon stays roughly level. It's hand-built from watching the clip, not extracted from the video.
+- **The stickman** strolls between random spots on the graveyard ground, waits a few seconds at each, and picks somewhere else if a grave or tree blocks it (`src/wanderer.c`).
+
 ## Sky
 
 The sky is `levels/sky.jpg`. It's wrapped around the world: the image covers half the horizon and is mirrored for the other half, with its bottom edge just under the horizon and its top at the zenith. It's fixed to the world's directions, so it pans when you turn the camera and never moves when you walk. Swap in another image to change it.
@@ -69,8 +75,11 @@ The sky is `levels/sky.jpg`. It's wrapped around the world: the image covers hal
 | File | What it does |
 | --- | --- |
 | `src/main.c` | Window, input, third-person mouse camera, HUD |
-| `src/player.c` | Stickman movement, collision, jumping and the procedural walk animation |
+| `src/player.c` | Character movement, collision, jumping, the walk cycle timing, and the stickman |
+| `src/knight.c` | Loads the knight and animates it |
+| `src/wanderer.c` | The stickman that roams the graveyard |
 | `src/world.c` | Loads the `.glb`, moonlight shader, the sky, collision raycasts against the map |
+| `characters/` | The knight model and its texture |
 | `index.html`, `web/` | Browser version served by GitHub Pages |
 
-The stickman is about 1.4 units tall. The gravestones are 1.2 to 2.5.
+The knight and the stickman are both 1.4 units tall. The gravestones are 1.2 to 2.5.

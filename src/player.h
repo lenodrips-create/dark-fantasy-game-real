@@ -5,9 +5,10 @@
 #include "world.h"
 #include <stdbool.h>
 
-// Standing height of the stickman, about half the tallest gravestones (2.5 units)
+// Standing height of the characters, about half the tallest gravestones (2.5 units)
 #define PLAYER_HEIGHT 1.4f
 
+// Movement, collision and walk cycle shared by every character; how they look is drawn on top of this
 typedef struct Player {
     Vector3 spawn;
     float spawnYaw;
@@ -36,6 +37,9 @@ void PlayerUpdate(Player *player, const World *world, Vector3 move, bool sprint,
 
 Stickman StickmanLoad(Shader shader);
 void StickmanUnload(Stickman *stickman);
-void PlayerDraw(const Player *player, const Stickman *stickman);
+void StickmanDraw(const Player *player, const Stickman *stickman);
+
+// Blob shadow under a character, radius in world units
+void PlayerDrawShadow(const Player *player, float radius);
 
 #endif

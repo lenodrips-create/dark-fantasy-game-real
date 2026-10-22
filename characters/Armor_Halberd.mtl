@@ -1,0 +1,4 @@
+# Texture for Armor_Halberd.obj
+newmtl Armor_Halberd
+Kd 1.0 1.0 1.0
+map_Kd Armor_Halberd.png

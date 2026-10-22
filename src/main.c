@@ -2,7 +2,9 @@
 #include "raymath.h"
 #include "rlgl.h"
 
+#include "knight.h"
 #include "player.h"
+#include "wanderer.h"
 #include "world.h"
 
 #include <math.h>
@@ -14,10 +16,15 @@
 
 #define LEVEL_PATH "levels/GroundWithHills.glb"
 #define SKY_PATH   "levels/sky.jpg"
+#define KNIGHT_PATH "characters/Armor_Halberd.obj"
 
 // Middle aisle of the graveyard, between the rows of graves, facing north toward the cliff gap
 static const Vector3 SPAWN_POINT = { 0.0f, 0.0f, 14.0f };
 #define SPAWN_YAW PI
+
+// The stickman strolls around the graveyard ground (x, z, width, depth), starting a little ahead of the player
+static const Rectangle GRAVEYARD_AREA = { -13.0f, -5.0f, 26.0f, 31.0f };
+static const Vector3 WANDERER_START = { 2.0f, 0.0f, 8.0f };
 
 #define MOUSE_SENSITIVITY 0.0035f
 #define CAMERA_HEIGHT     1.2f      // Orbit point above the feet, around the head
@@ -39,7 +46,10 @@ typedef struct Game {
     bool quit;
     World world;
     Stickman stickman;
+    Knight knight;
+    bool hasKnight;         // Falls back to drawing the player as a stickman if the model is missing
     Player player;
+    Wanderer wanderer;
     OrbitCamera orbit;
     Camera3D camera;
     bool ignoreMouseDelta;  // The first delta after capturing the cursor can be a big jump
@@ -181,13 +191,16 @@ static void UpdateDrawFrame(void)
     if (IsKeyPressed(KEY_R)) PlayerRespawn(&game.player, &game.world);
     bool sprint = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
     PlayerUpdate(&game.player, &game.world, move, sprint, IsKeyPressed(KEY_SPACE), dt);
+    WandererUpdate(&game.wanderer, &game.world, dt);
     UpdateOrbitCamera(&game.camera, orbit, &game.world, game.player.position, dt);
 
     BeginDrawing();
         ClearBackground(WORLD_SKY_COLOR);
         BeginMode3D(game.camera);
             WorldDraw(&game.world, game.camera);
-            PlayerDraw(&game.player, &game.stickman);
+            if (game.hasKnight) KnightDraw(&game.knight, &game.player);
+            else StickmanDraw(&game.player, &game.stickman);
+            StickmanDraw(&game.wanderer.body, &game.stickman);
         EndMode3D();
         DrawHud();
     EndDrawing();
@@ -211,7 +224,9 @@ int main(void)
     if (game.loaded)
     {
         game.stickman = StickmanLoad(game.world.shader);
+        game.hasKnight = KnightLoad(&game.knight, KNIGHT_PATH, game.world.shader);
         PlayerInit(&game.player, &game.world, SPAWN_POINT, SPAWN_YAW);
+        WandererInit(&game.wanderer, &game.world, WANDERER_START, GRAVEYARD_AREA);
 
         game.orbit = (OrbitCamera){ SPAWN_YAW + PI, 0.2f, 4.5f, 4.5f };
         game.camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
@@ -234,6 +249,7 @@ int main(void)
     if (game.loaded)
     {
         StickmanUnload(&game.stickman);
+        if (game.hasKnight) KnightUnload(&game.knight);
         WorldUnload(&game.world);
     }
     CloseWindow();

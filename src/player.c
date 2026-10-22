@@ -204,7 +204,7 @@ static void DrawBone(const Stickman *stickman, Vector3 a, Vector3 b, float radiu
     DrawJoint(stickman, b, radius);
 }
 
-void PlayerDraw(const Player *player, const Stickman *stickman)
+void StickmanDraw(const Player *player, const Stickman *stickman)
 {
     float swing = player->stride;
     float idle = sinf((float)GetTime()*1.8f)*0.05f*(1.0f - fminf(swing*2.0f, 1.0f));
@@ -258,9 +258,14 @@ void PlayerDraw(const Player *player, const Stickman *stickman)
         DrawBone(stickman, ToWorld(player, elbow), ToWorld(player, hand), LIMB_RADIUS);
     }
 
-    // Soft blob shadow on the ground, shrinking as we jump
+    PlayerDrawShadow(player, 0.28f);
+}
+
+void PlayerDrawShadow(const Player *player, float radius)
+{
+    // Soft blob on the ground, shrinking as the character jumps
     float height = fmaxf(player->position.y - player->groundY, 0.0f);
-    float shadowRadius = fmaxf(0.28f - height*0.15f, 0.1f);
+    float shadowRadius = fmaxf(radius - height*0.15f, radius*0.35f);
     Vector3 shadow = { player->position.x, player->groundY + 0.03f, player->position.z };
     DrawCylinder(shadow, shadowRadius, shadowRadius, 0.01f, 20, Fade(BLACK, 0.45f));
 }
