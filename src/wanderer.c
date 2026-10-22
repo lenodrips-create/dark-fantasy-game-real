@@ -2,7 +2,7 @@
 
 #include "raymath.h"
 
-#define STROLL       0.5f   // Fraction of walking speed
+#define STROLL       0.35f  // Fraction of walking speed
 #define ARRIVED      0.5f   // Close enough to the destination, in world units
 #define GIVE_UP_TIME 1.0f   // Pick somewhere else after this long blocked (a gravestone, a tree)
 

@@ -15,6 +15,11 @@ typedef struct World {
     Mesh skyMesh;
     Material skyMaterial;
 
+    // The actor: meshes lifted out of the level so they can walk around (the hooded figure)
+    bool *isActor;          // Per mesh
+    bool hasActor;
+    Vector3 actorOrigin;    // Where it stood in the map, at its feet
+
     // Collision: world-space triangles (raylib bakes the Blender node transforms into the meshes)
     // bucketed into a grid over the ground plane. Foliage is left out so leaves never block anything.
     Vector3 *triangles;     // Three corners per triangle
@@ -25,11 +30,15 @@ typedef struct World {
     float gridMinX, gridMinZ, cellSize;
 } World;
 
-bool WorldLoad(World *world, const char *path, const char *skyPath);
+// Meshes using the material named actorMaterialName become the actor: not drawn with the level, not solid
+bool WorldLoad(World *world, const char *path, const char *skyPath, const char *actorMaterialName);
 void WorldUnload(World *world);
 
 // Draws the sky and the level; call first inside BeginMode3D()
 void WorldDraw(const World *world, Camera3D camera);
+
+// Draws the actor standing at position, facing yaw (it faces +Z in the map), tilted by lean and roll
+void WorldDrawActor(const World *world, Vector3 position, float yaw, float lean, float roll);
 
 // Closest solid hit along the ray, up to maxDistance.
 RayCollision WorldRaycast(const World *world, Ray ray, float maxDistance);

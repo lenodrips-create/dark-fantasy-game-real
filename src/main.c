@@ -17,14 +17,17 @@
 #define LEVEL_PATH "levels/GroundWithHills.glb"
 #define SKY_PATH   "levels/sky.jpg"
 #define KNIGHT_PATH "characters/Armor_Halberd.obj"
+#define HOODED_FIGURE_MATERIAL "PoeCollector"   // The purple hooded figure in the map, found by its Blender material
 
 // Middle aisle of the graveyard, between the rows of graves, facing north toward the cliff gap
 static const Vector3 SPAWN_POINT = { 0.0f, 0.0f, 14.0f };
 #define SPAWN_YAW PI
 
-// The stickman strolls around the graveyard ground (x, z, width, depth), starting a little ahead of the player
+// The hooded figure strolls around the graveyard ground (x, z, width, depth), starting where it stands in the map
 static const Rectangle GRAVEYARD_AREA = { -13.0f, -5.0f, 26.0f, 31.0f };
-static const Vector3 WANDERER_START = { 2.0f, 0.0f, 8.0f };
+
+#define KNIGHT_RADIUS        0.35f
+#define HOODED_FIGURE_RADIUS 0.6f   // Its robe; the outstretched arms are left out
 
 #define MOUSE_SENSITIVITY 0.0035f
 #define CAMERA_HEIGHT     1.2f      // Orbit point above the feet, around the head
@@ -45,11 +48,9 @@ typedef struct Game {
     bool loaded;
     bool quit;
     World world;
-    Stickman stickman;
     Knight knight;
-    bool hasKnight;         // Falls back to drawing the player as a stickman if the model is missing
     Player player;
-    Wanderer wanderer;
+    Wanderer hoodedFigure;
     OrbitCamera orbit;
     Camera3D camera;
     bool ignoreMouseDelta;  // The first delta after capturing the cursor can be a big jump
@@ -138,6 +139,32 @@ static void DrawHud(void)
     }
 }
 
+// Keeps two characters from walking through each other by pushing the first one out
+static void PushApart(Player *mover, float moverRadius, const Player *other, float otherRadius)
+{
+    Vector2 offset = { mover->position.x - other->position.x, mover->position.z - other->position.z };
+    float distance = Vector2Length(offset);
+    float overlap = moverRadius + otherRadius - distance;
+    if ((overlap <= 0.0f) || (distance < 0.0001f)) return;
+
+    mover->position.x += offset.x/distance*overlap;
+    mover->position.z += offset.y/distance*overlap;
+}
+
+// The hooded figure has no legs, so it glides: a bob and a sway in time with its steps, and a slow hover
+static void DrawHoodedFigure(const Wanderer *figure, const World *world)
+{
+    if (!world->hasActor) return;
+
+    const Player *body = &figure->body;
+    float swing = body->stride;
+    float bob = fabsf(sinf(body->walkPhase))*0.08f*swing + (sinf((float)GetTime()*1.5f) + 1.0f)*0.04f;
+    float lean = swing*0.15f;
+    float roll = sinf(body->walkPhase)*0.08f*swing;
+    WorldDrawActor(world, (Vector3){ body->position.x, body->position.y + bob, body->position.z }, body->yaw, lean, roll);
+    PlayerDrawShadow(body, 0.8f);
+}
+
 static void UpdateDrawFrame(void)
 {
     if (!game.loaded)
@@ -145,8 +172,8 @@ static void UpdateDrawFrame(void)
         if (IsKeyPressed(KEY_ESCAPE)) game.quit = true;
         BeginDrawing();
             ClearBackground(BLACK);
-            DrawText("Could not load " LEVEL_PATH, 20, 20, 20, RED);
-            DrawText("Run the game from the repository folder, or keep the levels folder next to the executable.", 20, 50, 20, RAYWHITE);
+            DrawText("Could not load " LEVEL_PATH " or " KNIGHT_PATH, 20, 20, 20, RED);
+            DrawText("Run the game from the repository folder, or keep the levels and characters folders next to the executable.", 20, 50, 20, RAYWHITE);
         EndDrawing();
         return;
     }
@@ -191,16 +218,19 @@ static void UpdateDrawFrame(void)
     if (IsKeyPressed(KEY_R)) PlayerRespawn(&game.player, &game.world);
     bool sprint = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
     PlayerUpdate(&game.player, &game.world, move, sprint, IsKeyPressed(KEY_SPACE), dt);
-    WandererUpdate(&game.wanderer, &game.world, dt);
+    if (game.world.hasActor)
+    {
+        WandererUpdate(&game.hoodedFigure, &game.world, dt);
+        PushApart(&game.player, KNIGHT_RADIUS, &game.hoodedFigure.body, HOODED_FIGURE_RADIUS);
+    }
     UpdateOrbitCamera(&game.camera, orbit, &game.world, game.player.position, dt);
 
     BeginDrawing();
         ClearBackground(WORLD_SKY_COLOR);
         BeginMode3D(game.camera);
             WorldDraw(&game.world, game.camera);
-            if (game.hasKnight) KnightDraw(&game.knight, &game.player);
-            else StickmanDraw(&game.player, &game.stickman);
-            StickmanDraw(&game.wanderer.body, &game.stickman);
+            KnightDraw(&game.knight, &game.player);
+            DrawHoodedFigure(&game.hoodedFigure, &game.world);
         EndMode3D();
         DrawHud();
     EndDrawing();
@@ -220,13 +250,16 @@ int main(void)
     DrawText("Loading...", 20, GetScreenHeight() - 40, 20, RAYWHITE);
     EndDrawing();
 
-    game.loaded = WorldLoad(&game.world, LEVEL_PATH, SKY_PATH);
+    game.loaded = WorldLoad(&game.world, LEVEL_PATH, SKY_PATH, HOODED_FIGURE_MATERIAL);
+    if (game.loaded && !KnightLoad(&game.knight, KNIGHT_PATH, game.world.shader))
+    {
+        WorldUnload(&game.world);
+        game.loaded = false;
+    }
     if (game.loaded)
     {
-        game.stickman = StickmanLoad(game.world.shader);
-        game.hasKnight = KnightLoad(&game.knight, KNIGHT_PATH, game.world.shader);
         PlayerInit(&game.player, &game.world, SPAWN_POINT, SPAWN_YAW);
-        WandererInit(&game.wanderer, &game.world, WANDERER_START, GRAVEYARD_AREA);
+        WandererInit(&game.hoodedFigure, &game.world, game.world.actorOrigin, GRAVEYARD_AREA);
 
         game.orbit = (OrbitCamera){ SPAWN_YAW + PI, 0.2f, 4.5f, 4.5f };
         game.camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
@@ -248,8 +281,7 @@ int main(void)
 
     if (game.loaded)
     {
-        StickmanUnload(&game.stickman);
-        if (game.hasKnight) KnightUnload(&game.knight);
+        KnightUnload(&game.knight);
         WorldUnload(&game.world);
     }
     CloseWindow();

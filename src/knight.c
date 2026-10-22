@@ -134,7 +134,7 @@ static void PoseParts(const Player *player, Matrix *parts)
     for (int i = 0; i < 2; i++)
     {
         float p = phase + i*PI;
-        thigh[i] = sinf(p)*swing*1.1f;
+        thigh[i] = sinf(p)*swing*1.3f;
         knee[i] = swing*(0.3f + 1.6f*fmaxf(0.0f, cosf(p)));
         if (!player->grounded)
         {

@@ -6,24 +6,14 @@
 
 #define PLAYER_RADIUS  0.2f
 #define STEP_HEIGHT    0.3f     // Highest ledge the player walks up without jumping
-#define WALK_SPEED     3.5f
-#define SPRINT_SPEED   8.0f
+#define WALK_SPEED     4.5f
+#define SPRINT_SPEED   9.0f
 #define JUMP_SPEED     5.0f
 #define GRAVITY        20.0f
 #define TURN_RATE      12.0f
 #define FALL_LIMIT     -60.0f   // Respawn if we ever drop out of the world
 
-// Stickman proportions (feet at 0, adds up to PLAYER_HEIGHT standing straight)
-#define THIGH_LENGTH     0.34f
-#define SHIN_LENGTH      0.34f
-#define SPINE_LENGTH     0.43f
-#define UPPER_ARM_LENGTH 0.28f
-#define FOREARM_LENGTH   0.26f
-#define HEAD_RADIUS      0.14f
-#define LIMB_RADIUS      0.035f
-#define STRIDE_RATE      4.6f   // Walk cycle radians per unit travelled
-
-static const Color BONE_COLOR = { 228, 222, 206, 255 };
+#define STRIDE_RATE    3.1f     // Walk cycle radians per unit travelled: one step covers about a unit
 
 void PlayerInit(Player *player, const World *world, Vector3 spawn, float yaw)
 {
@@ -143,122 +133,6 @@ void PlayerUpdate(Player *player, const World *world, Vector3 move, bool sprint,
     player->walkPhase = fmodf(player->walkPhase + moved*STRIDE_RATE, 2.0f*PI);
     float targetStride = (moved > 0.0001f)? (player->sprinting? 0.8f : 0.55f) : 0.0f;
     player->stride += (targetStride - player->stride)*fminf(1.0f, 10.0f*dt);
-}
-
-Stickman StickmanLoad(Shader shader)
-{
-    Stickman stickman = { 0 };
-    stickman.limb = GenMeshCylinder(1.0f, 1.0f, 10);   // Unit cylinder from y = 0 to y = 1
-    stickman.joint = GenMeshSphere(1.0f, 12, 16);
-    stickman.material = LoadMaterialDefault();
-    stickman.material.shader = shader;
-    stickman.material.maps[MATERIAL_MAP_ALBEDO].color = BONE_COLOR;
-    return stickman;
-}
-
-void StickmanUnload(Stickman *stickman)
-{
-    UnloadMesh(stickman->limb);
-    UnloadMesh(stickman->joint);
-    MemFree(stickman->material.maps);   // The shader belongs to the world
-    *stickman = (Stickman){ 0 };
-}
-
-// Local stickman space: x = right, y = up, z = forward
-static Vector3 ToWorld(const Player *player, Vector3 local)
-{
-    float s = sinf(player->yaw);
-    float c = cosf(player->yaw);
-    return (Vector3){
-        player->position.x - local.x*c + local.z*s,
-        player->position.y + local.y,
-        player->position.z + local.x*s + local.z*c
-    };
-}
-
-// Direction swung forward by angle from hanging straight down, splayed sideways
-static Vector3 LimbDir(float angle, float splay)
-{
-    return Vector3Normalize((Vector3){ splay, -cosf(angle), sinf(angle) });
-}
-
-static void DrawJoint(const Stickman *stickman, Vector3 position, float radius)
-{
-    Matrix transform = MatrixMultiply(MatrixScale(radius, radius, radius), MatrixTranslate(position.x, position.y, position.z));
-    DrawMesh(stickman->joint, stickman->material, transform);
-}
-
-static void DrawBone(const Stickman *stickman, Vector3 a, Vector3 b, float radius)
-{
-    // Always point the cylinder upward so the rotation never has to flip 180 degrees
-    if (b.y < a.y) { Vector3 t = a; a = b; b = t; }
-
-    Vector3 delta = Vector3Subtract(b, a);
-    float length = Vector3Length(delta);
-    if (length < 0.0001f) return;
-
-    Quaternion rotation = QuaternionFromVector3ToVector3((Vector3){ 0.0f, 1.0f, 0.0f }, Vector3Scale(delta, 1.0f/length));
-    Matrix transform = MatrixMultiply(MatrixMultiply(MatrixScale(radius, length, radius), QuaternionToMatrix(rotation)), MatrixTranslate(a.x, a.y, a.z));
-    DrawMesh(stickman->limb, stickman->material, transform);
-    DrawJoint(stickman, a, radius);
-    DrawJoint(stickman, b, radius);
-}
-
-void StickmanDraw(const Player *player, const Stickman *stickman)
-{
-    float swing = player->stride;
-    float idle = sinf((float)GetTime()*1.8f)*0.05f*(1.0f - fminf(swing*2.0f, 1.0f));
-
-    // Legs: left and right half a cycle apart, knee bends while the leg swings forward
-    Vector3 thigh[2], shin[2];
-    float hipHeight = 0.0f;
-    for (int i = 0; i < 2; i++)
-    {
-        float side = (i == 0)? 1.0f : -1.0f;
-        float phase = player->walkPhase + i*PI;
-        float thighAngle = sinf(phase)*swing;
-        float kneeBend = swing*1.3f*fmaxf(0.0f, cosf(phase));
-        if (!player->grounded) { thighAngle = 0.35f*side; kneeBend = 0.6f; }
-
-        thigh[i] = Vector3Scale(LimbDir(thighAngle, side*0.12f), THIGH_LENGTH);
-        shin[i] = Vector3Scale(LimbDir(thighAngle - kneeBend, side*0.08f), SHIN_LENGTH);
-
-        // The hip rides on whichever leg reaches lowest, which gives the walk its bob
-        hipHeight = fmaxf(hipHeight, -(thigh[i].y + shin[i].y));
-    }
-
-    Vector3 hip = { 0.0f, hipHeight, 0.0f };
-    float lean = swing*0.3f;
-    Vector3 spine = { 0.0f, cosf(lean), sinf(lean) };
-    Vector3 neck = Vector3Add(hip, Vector3Scale(spine, SPINE_LENGTH));
-    Vector3 shoulder = Vector3Add(hip, Vector3Scale(spine, SPINE_LENGTH - 0.05f));
-    Vector3 head = Vector3Add(neck, Vector3Scale(spine, HEAD_RADIUS + 0.015f));
-
-    Vector3 hipW = ToWorld(player, hip);
-    DrawBone(stickman, hipW, ToWorld(player, neck), LIMB_RADIUS*1.2f);
-    DrawJoint(stickman, ToWorld(player, head), HEAD_RADIUS);
-
-    for (int i = 0; i < 2; i++)
-    {
-        float side = (i == 0)? 1.0f : -1.0f;
-
-        Vector3 knee = Vector3Add(hip, thigh[i]);
-        Vector3 foot = Vector3Add(knee, shin[i]);
-        DrawBone(stickman, hipW, ToWorld(player, knee), LIMB_RADIUS);
-        DrawBone(stickman, ToWorld(player, knee), ToWorld(player, foot), LIMB_RADIUS);
-
-        // Arms swing against the leg on the same side
-        float armAngle = -sinf(player->walkPhase + i*PI)*swing*0.9f + idle*side;
-        float forearmAngle = armAngle + 0.25f + swing*0.6f;
-        if (!player->grounded) { armAngle = 0.4f; forearmAngle = 1.2f; }
-
-        Vector3 elbow = Vector3Add(shoulder, Vector3Scale(LimbDir(armAngle, side*0.35f), UPPER_ARM_LENGTH));
-        Vector3 hand = Vector3Add(elbow, Vector3Scale(LimbDir(forearmAngle, side*0.2f), FOREARM_LENGTH));
-        DrawBone(stickman, ToWorld(player, shoulder), ToWorld(player, elbow), LIMB_RADIUS);
-        DrawBone(stickman, ToWorld(player, elbow), ToWorld(player, hand), LIMB_RADIUS);
-    }
-
-    PlayerDrawShadow(player, 0.28f);
 }
 
 void PlayerDrawShadow(const Player *player, float radius)
