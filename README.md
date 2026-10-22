@@ -58,7 +58,7 @@ Export from Blender with **File > Export > glTF 2.0**, format **glTF Binary (.gl
 - Use **+Y Up** (the exporter default). Object positions, rotations and scales are applied when the map loads.
 - Every mesh is solid: the player stands on it and bumps into it. Materials using **Alpha Blend** or **Alpha Clip** (leaves, tree line cards) are treated as foliage and don't block anything.
 - The spawn point is `SPAWN_POINT` at the top of `src/main.c`. It's currently the middle aisle of the graveyard, facing north toward the cliff gap.
-- `levels/GroundWithHills.glb` was changed after export: the graveyard was widened (ground 28 units across instead of 14, cliffs moved out to match, graves and trees spread out), and all 12 gravestones were replaced with the `Gravestone.obj` model (1.8 units tall, "R.I.P" side facing south). Your Blender file has neither change, so a fresh export brings back the old graveyard unless you make them in Blender too.
+- `levels/GroundWithHills.glb` was changed after export: the graveyard was widened (ground 28 units across instead of 14, cliffs moved out to match, graves and trees spread out), and all 12 gravestones were replaced with the `Gravestone.obj` model (1.8 units tall, "R.I.P" side facing north, over the dirt of each grave). Your Blender file has neither change, so a fresh export brings back the old graveyard unless you make them in Blender too.
 
 ## Characters
 
