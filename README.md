@@ -2,6 +2,8 @@
 
 A third-person prototype written in C with [raylib](https://www.raylib.com/). You play a stickman who starts in the graveyard of the Blender map `levels/GroundWithHills.glb` and can walk out through the canyon, across the field and up to the village.
 
+**Play it in your browser:** https://lenodrips-create.github.io/dark-fantasy-game-real/ (click the game to grab the mouse)
+
 ## Controls
 
 | Key | Action |
@@ -36,6 +38,19 @@ The build copies `levels/` next to the executable, so you can also start the gam
 - **macOS:** `xcode-select --install`, then `brew install cmake`.
 - **Linux (Debian/Ubuntu):** `sudo apt install build-essential cmake libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev`
 
+### Web version
+
+The browser version is the same C code compiled to WebAssembly with [Emscripten](https://emscripten.org/docs/getting_started/downloads.html). GitHub Pages serves `index.html`, which loads `web/dark_fantasy.js` + `web/dark_fantasy.wasm` and downloads the map from `levels/`.
+
+After changing the C code, rebuild the web files and commit them:
+
+```sh
+emcmake cmake -S . -B build-web
+cmake --build build-web
+```
+
+This writes straight into `web/`. Replacing the map in `levels/` needs no rebuild, the web version picks it up on the next page load.
+
 ## Changing the map
 
 Export from Blender with **File > Export > glTF 2.0**, format **glTF Binary (.glb)**, and save it over `levels/GroundWithHills.glb`.
@@ -51,5 +66,6 @@ Export from Blender with **File > Export > glTF 2.0**, format **glTF Binary (.gl
 | `src/main.c` | Window, input, third-person mouse camera, HUD |
 | `src/player.c` | Stickman movement, collision, jumping and the procedural walk animation |
 | `src/world.c` | Loads the `.glb`, moonlight + fog shader, collision raycasts against the map |
+| `index.html`, `web/` | Browser version served by GitHub Pages |
 
 The stickman is about 2.8 units tall. The tallest gravestones are about 2.5.

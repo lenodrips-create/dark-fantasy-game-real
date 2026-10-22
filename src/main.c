@@ -7,6 +7,11 @@
 
 #include <math.h>
 
+#if defined(__EMSCRIPTEN__)
+    #include <emscripten/emscripten.h>
+    #include <emscripten/html5.h>
+#endif
+
 #define LEVEL_PATH "levels/GroundWithHills.glb"
 
 // Middle aisle of the graveyard, between the rows of graves, facing north toward the cliff gap
@@ -27,6 +32,45 @@ typedef struct OrbitCamera {
     float distance;     // Wanted distance (mouse wheel)
     float current;      // Actual distance after pulling in for walls
 } OrbitCamera;
+
+typedef struct Game {
+    bool loaded;
+    bool quit;
+    World world;
+    Stickman stickman;
+    Player player;
+    OrbitCamera orbit;
+    Camera3D camera;
+    bool ignoreMouseDelta;  // The first delta after capturing the cursor can be a big jump
+} Game;
+
+// Global so the browser's frame callback can reach it
+static Game game = { 0 };
+
+#if defined(__EMSCRIPTEN__)
+// While the pointer is locked raylib only keeps the last mouse move of each frame, so add them all up here
+static Vector2 webMouseMotion = { 0 };
+
+static EM_BOOL OnWebMouseMove(int eventType, const EmscriptenMouseEvent *event, void *userData)
+{
+    (void)eventType;
+    (void)userData;
+    webMouseMotion.x += (float)event->movementX;
+    webMouseMotion.y += (float)event->movementY;
+    return EM_FALSE;    // Let raylib see the event too
+}
+#endif
+
+static Vector2 GetMouseLook(void)
+{
+#if defined(__EMSCRIPTEN__)
+    Vector2 motion = webMouseMotion;
+    webMouseMotion = (Vector2){ 0 };
+    return motion;
+#else
+    return GetMouseDelta();
+#endif
+}
 
 static void UpdateOrbitCamera(Camera3D *camera, OrbitCamera *orbit, const World *world, Vector3 playerPosition, float dt)
 {
@@ -58,7 +102,11 @@ static void DrawHud(void)
         "Space - jump",
         "Mouse wheel - zoom",
         "R - back to spawn",
+#if defined(__EMSCRIPTEN__)
+        "Esc - free mouse",
+#else
         "Esc - free mouse / quit",
+#endif
     };
     const int count = sizeof(lines)/sizeof(lines[0]);
 
@@ -68,18 +116,88 @@ static void DrawHud(void)
 
     if (!IsCursorHidden())
     {
+#if defined(__EMSCRIPTEN__)
+        const char *text = "Click to play";
+#else
         const char *text = "Click to look around  -  Esc again to quit";
+#endif
         int width = MeasureText(text, 24);
+        DrawRectangle(0, GetScreenHeight()/2 - 24, GetScreenWidth(), 48, Fade(BLACK, 0.45f));
         DrawText(text, (GetScreenWidth() - width)/2, GetScreenHeight()/2 - 12, 24, RAYWHITE);
     }
+}
+
+static void UpdateDrawFrame(void)
+{
+    if (!game.loaded)
+    {
+        if (IsKeyPressed(KEY_ESCAPE)) game.quit = true;
+        BeginDrawing();
+            ClearBackground(BLACK);
+            DrawText("Could not load " LEVEL_PATH, 20, 20, 20, RED);
+            DrawText("Run the game from the repository folder, or keep the levels folder next to the executable.", 20, 50, 20, RAYWHITE);
+        EndDrawing();
+        return;
+    }
+
+    float dt = fminf(GetFrameTime(), 0.05f);
+    OrbitCamera *orbit = &game.orbit;
+
+    if (IsKeyPressed(KEY_ESCAPE))
+    {
+        if (IsCursorHidden()) EnableCursor();
+#if !defined(__EMSCRIPTEN__)
+        else game.quit = true;
+#endif
+    }
+    if (!IsCursorHidden() && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+    {
+        DisableCursor();
+        game.ignoreMouseDelta = true;
+    }
+
+    Vector2 mouse = GetMouseLook();
+    if (IsCursorHidden())
+    {
+        if (game.ignoreMouseDelta) mouse = (Vector2){ 0 };
+        game.ignoreMouseDelta = false;
+
+        orbit->yaw -= mouse.x*MOUSE_SENSITIVITY;
+        orbit->pitch = Clamp(orbit->pitch + mouse.y*MOUSE_SENSITIVITY, CAMERA_MIN_PITCH, CAMERA_MAX_PITCH);
+    }
+    orbit->distance = Clamp(orbit->distance - GetMouseWheelMove()*0.8f, CAMERA_MIN_DIST, CAMERA_MAX_DIST);
+
+    // WASD is relative to where the camera is looking
+    Vector3 forward = { -sinf(orbit->yaw), 0.0f, -cosf(orbit->yaw) };
+    Vector3 right = { cosf(orbit->yaw), 0.0f, -sinf(orbit->yaw) };
+    Vector3 move = { 0 };
+    if (IsKeyDown(KEY_W)) move = Vector3Add(move, forward);
+    if (IsKeyDown(KEY_S)) move = Vector3Subtract(move, forward);
+    if (IsKeyDown(KEY_D)) move = Vector3Add(move, right);
+    if (IsKeyDown(KEY_A)) move = Vector3Subtract(move, right);
+    if (Vector3Length(move) > 1.0f) move = Vector3Normalize(move);
+
+    if (IsKeyPressed(KEY_R)) PlayerRespawn(&game.player, &game.world);
+    bool sprint = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+    PlayerUpdate(&game.player, &game.world, move, sprint, IsKeyPressed(KEY_SPACE), dt);
+    UpdateOrbitCamera(&game.camera, orbit, &game.world, game.player.position, dt);
+
+    BeginDrawing();
+        ClearBackground(WORLD_SKY_COLOR);
+        BeginMode3D(game.camera);
+            WorldBeginFrame(&game.world, game.camera);
+            WorldDraw(&game.world);
+            PlayerDraw(&game.player, &game.stickman);
+        EndMode3D();
+        DrawHud();
+    EndDrawing();
 }
 
 int main(void)
 {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
     InitWindow(1280, 720, "Dark Fantasy");
-    SetExitKey(KEY_NULL);   // Esc frees the mouse first, see below
-    SetTargetFPS(144);
+    SetExitKey(KEY_NULL);   // Esc frees the mouse first, see UpdateDrawFrame()
 
     // Works whether we're started from the repo root or from next to the executable
     if (!FileExists(LEVEL_PATH)) ChangeDirectory(GetApplicationDirectory());
@@ -89,89 +207,37 @@ int main(void)
     DrawText("Loading...", 20, GetScreenHeight() - 40, 20, RAYWHITE);
     EndDrawing();
 
-    World world;
-    if (!WorldLoad(&world, LEVEL_PATH))
+    game.loaded = WorldLoad(&game.world, LEVEL_PATH);
+    if (game.loaded)
     {
-        while (!WindowShouldClose() && !IsKeyPressed(KEY_ESCAPE))
-        {
-            BeginDrawing();
-            ClearBackground(BLACK);
-            DrawText("Could not load " LEVEL_PATH, 20, 20, 20, RED);
-            DrawText("Run the game from the repository folder, or keep the levels folder next to the executable.", 20, 50, 20, RAYWHITE);
-            EndDrawing();
-        }
-        CloseWindow();
-        return 1;
+        game.stickman = StickmanLoad(game.world.shader);
+        PlayerInit(&game.player, &game.world, SPAWN_POINT, SPAWN_YAW);
+
+        game.orbit = (OrbitCamera){ SPAWN_YAW + PI, 0.3f, 7.0f, 7.0f };
+        game.camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
+        game.camera.fovy = 60.0f;
+        game.camera.projection = CAMERA_PERSPECTIVE;
+        rlSetClipPlanes(0.05, 2000.0);
     }
 
-    Stickman stickman = StickmanLoad(world.shader);
-    Player player;
-    PlayerInit(&player, &world, SPAWN_POINT, SPAWN_YAW);
+#if defined(__EMSCRIPTEN__)
+    // Browsers only allow grabbing the mouse after a click, which the "Click to play" prompt asks for
+    emscripten_set_mousemove_callback(EMSCRIPTEN_EVENT_TARGET_DOCUMENT, NULL, 1, OnWebMouseMove);
+    emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
+#else
+    if (game.loaded) DisableCursor();
+    game.ignoreMouseDelta = true;
+    SetTargetFPS(144);
 
-    OrbitCamera orbit = { SPAWN_YAW + PI, 0.3f, 7.0f, 7.0f };
-    Camera3D camera = { 0 };
-    camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
-    camera.fovy = 60.0f;
-    camera.projection = CAMERA_PERSPECTIVE;
-    rlSetClipPlanes(0.05, 2000.0);
+    while (!WindowShouldClose() && !game.quit) UpdateDrawFrame();
 
-    DisableCursor();
-    bool ignoreMouseDelta = true;   // The first delta after capturing the cursor can be a big jump
-
-    while (!WindowShouldClose())
+    if (game.loaded)
     {
-        float dt = fminf(GetFrameTime(), 0.05f);
-
-        if (IsKeyPressed(KEY_ESCAPE))
-        {
-            if (IsCursorHidden()) EnableCursor();
-            else break;
-        }
-        if (!IsCursorHidden() && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-        {
-            DisableCursor();
-            ignoreMouseDelta = true;
-        }
-
-        if (IsCursorHidden())
-        {
-            Vector2 mouse = GetMouseDelta();
-            if (ignoreMouseDelta) mouse = (Vector2){ 0 };
-            ignoreMouseDelta = false;
-
-            orbit.yaw -= mouse.x*MOUSE_SENSITIVITY;
-            orbit.pitch = Clamp(orbit.pitch + mouse.y*MOUSE_SENSITIVITY, CAMERA_MIN_PITCH, CAMERA_MAX_PITCH);
-        }
-        orbit.distance = Clamp(orbit.distance - GetMouseWheelMove()*0.8f, CAMERA_MIN_DIST, CAMERA_MAX_DIST);
-
-        // WASD is relative to where the camera is looking
-        Vector3 forward = { -sinf(orbit.yaw), 0.0f, -cosf(orbit.yaw) };
-        Vector3 right = { cosf(orbit.yaw), 0.0f, -sinf(orbit.yaw) };
-        Vector3 move = { 0 };
-        if (IsKeyDown(KEY_W)) move = Vector3Add(move, forward);
-        if (IsKeyDown(KEY_S)) move = Vector3Subtract(move, forward);
-        if (IsKeyDown(KEY_D)) move = Vector3Add(move, right);
-        if (IsKeyDown(KEY_A)) move = Vector3Subtract(move, right);
-        if (Vector3Length(move) > 1.0f) move = Vector3Normalize(move);
-
-        if (IsKeyPressed(KEY_R)) PlayerRespawn(&player, &world);
-        bool sprint = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-        PlayerUpdate(&player, &world, move, sprint, IsKeyPressed(KEY_SPACE), dt);
-        UpdateOrbitCamera(&camera, &orbit, &world, player.position, dt);
-
-        BeginDrawing();
-            ClearBackground(WORLD_SKY_COLOR);
-            BeginMode3D(camera);
-                WorldBeginFrame(&world, camera);
-                WorldDraw(&world);
-                PlayerDraw(&player, &stickman);
-            EndMode3D();
-            DrawHud();
-        EndDrawing();
+        StickmanUnload(&game.stickman);
+        WorldUnload(&game.world);
     }
-
-    StickmanUnload(&stickman);
-    WorldUnload(&world);
     CloseWindow();
+#endif
+
     return 0;
 }

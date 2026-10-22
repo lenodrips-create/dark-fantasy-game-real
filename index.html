@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dark Fantasy</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #181a24; }
+  canvas { display: block; width: 100vw; height: 100vh; outline: none; }
+  #loading {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    padding: 0 16px; text-align: center;
+    background: #181a24; color: #d2cdbe; font: 18px/1.5 Georgia, serif;
+  }
+  #bar { width: min(320px, 70vw); height: 6px; border-radius: 3px; background: #2c2f3d; overflow: hidden; }
+  #fill { width: 0; height: 100%; background: #d2cdbe; transition: width 0.2s; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+<div id="loading">
+  <div id="status">Loading...</div>
+  <div id="bar"><div id="fill"></div></div>
+</div>
+<script>
+  var LEVEL_PATH = 'levels/GroundWithHills.glb';
+  var canvas = document.getElementById('canvas');
+  var loadingEl = document.getElementById('loading');
+  var statusEl = document.getElementById('status');
+  var fillEl = document.getElementById('fill');
+
+  function showMessage(text) {
+    statusEl.textContent = text;
+    document.getElementById('bar').style.display = 'none';
+    loadingEl.style.display = 'flex';
+  }
+
+  // Downloads the map with a progress bar. The game reads it from levels/ just like the desktop version,
+  // so replacing the .glb in the repository updates the web game too.
+  function downloadLevel() {
+    return fetch(LEVEL_PATH).then(function (response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      var total = Number(response.headers.get('Content-Length')) || 0;
+      if (!response.body || !total) return response.arrayBuffer().then(function (buffer) { return new Uint8Array(buffer); });
+
+      var reader = response.body.getReader();
+      var chunks = [];
+      var received = 0;
+      function pump() {
+        return reader.read().then(function (result) {
+          if (result.done) {
+            var data = new Uint8Array(received);
+            var offset = 0;
+            chunks.forEach(function (chunk) { data.set(chunk, offset); offset += chunk.length; });
+            return data;
+          }
+          chunks.push(result.value);
+          received += result.value.length;
+          fillEl.style.width = Math.min(100, received/total*100) + '%';
+          return pump();
+        });
+      }
+      return pump();
+    });
+  }
+
+  var Module = {
+    canvas: canvas,
+    preRun: [function () {
+      statusEl.textContent = 'Downloading the map...';
+      Module.addRunDependency('level');
+      downloadLevel().then(function (data) {
+        statusEl.textContent = 'Starting...';
+        fillEl.style.width = '100%';
+        Module.FS.mkdir('/levels');
+        Module.FS.writeFile('/' + LEVEL_PATH, data);
+        Module.removeRunDependency('level');
+      }).catch(function (error) {
+        showMessage('Could not download the map (' + error.message + '). Try reloading the page.');
+      });
+    }],
+    postRun: [function () { loadingEl.style.display = 'none'; }],
+    onAbort: function () { showMessage('The game crashed. Try reloading the page.'); },
+    print: function (text) { console.log(text); },
+    printErr: function (text) { console.warn(text); }
+  };
+
+  // Grab the mouse right in the click handler, which browsers require. The game asks for it too, but a frame later.
+  canvas.addEventListener('mousedown', function () {
+    if (!document.pointerLockElement) canvas.requestPointerLock();
+  });
+
+  if (!document.createElement('canvas').getContext('webgl2')) {
+    showMessage('This game needs WebGL 2. Try a recent Chrome, Firefox, Edge or Safari.');
+  } else {
+    var script = document.createElement('script');
+    script.src = 'web/dark_fantasy.js';
+    script.onerror = function () { showMessage('Could not load the game files. Try reloading the page.'); };
+    document.body.appendChild(script);
+  }
+</script>
+</body>
+</html>

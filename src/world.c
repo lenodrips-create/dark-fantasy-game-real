@@ -17,8 +17,15 @@ static const Vector3 LIGHT_DIR    = { -0.35f, -0.85f, 0.40f };  // Direction the
 static const Vector3 LIGHT_COLOR   = { 0.62f, 0.66f, 0.82f };
 static const Vector3 AMBIENT_COLOR = { 0.36f, 0.36f, 0.46f };
 
+// Desktop runs OpenGL 3.3, the browser build WebGL 2 (OpenGL ES 3.0)
+#if defined(__EMSCRIPTEN__)
+    #define GLSL_HEADER "#version 300 es\nprecision highp float;\n"
+#else
+    #define GLSL_HEADER "#version 330\n"
+#endif
+
 static const char *LIT_VS =
-    "#version 330\n"
+    GLSL_HEADER
     "in vec3 vertexPosition;\n"
     "in vec2 vertexTexCoord;\n"
     "in vec3 vertexNormal;\n"
@@ -40,7 +47,7 @@ static const char *LIT_VS =
     "}\n";
 
 static const char *LIT_FS =
-    "#version 330\n"
+    GLSL_HEADER
     "in vec3 fragPosition;\n"
     "in vec2 fragTexCoord;\n"
     "in vec4 fragColor;\n"
