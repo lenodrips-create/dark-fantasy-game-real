@@ -158,7 +158,7 @@ static void DrawHoodedFigure(const Wanderer *figure, const World *world)
 
     const Player *body = &figure->body;
     float swing = body->stride;
-    float legSwing = sinf(body->walkPhase)*swing*1.45f;
+    float legSwing = sinf(body->walkPhase)*swing*1.3f;
     float bob = fabsf(sinf(legSwing))*0.2f;      // Its long feet tip down as a leg swings back, so lift it to keep the toes up
     float lean = swing*0.12f;
     float roll = sinf(body->walkPhase)*0.06f*swing;

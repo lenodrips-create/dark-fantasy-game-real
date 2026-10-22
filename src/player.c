@@ -6,7 +6,7 @@
 
 #define PLAYER_RADIUS  0.2f
 #define STEP_HEIGHT    0.3f     // Highest ledge the player walks up without jumping
-#define WALK_SPEED     4.5f
+#define WALK_SPEED     5.0f
 #define SPRINT_SPEED   9.0f
 #define JUMP_SPEED     5.0f
 #define GRAVITY        20.0f
