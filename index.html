@@ -6,15 +6,15 @@
 <title>Dark Fantasy</title>
 <link rel="icon" href="data:,">
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #181a24; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0e0622; }
   canvas { display: block; width: 100vw; height: 100vh; outline: none; }
   #loading {
     position: fixed; inset: 0;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
     padding: 0 16px; text-align: center;
-    background: #181a24; color: #d2cdbe; font: 18px/1.5 Georgia, serif;
+    background: #0e0622; color: #d2cdbe; font: 18px/1.5 Georgia, serif;
   }
-  #bar { width: min(320px, 70vw); height: 6px; border-radius: 3px; background: #2c2f3d; overflow: hidden; }
+  #bar { width: min(320px, 70vw); height: 6px; border-radius: 3px; background: #2a2140; overflow: hidden; }
   #fill { width: 0; height: 100%; background: #d2cdbe; transition: width 0.2s; }
 </style>
 </head>
@@ -25,7 +25,8 @@
   <div id="bar"><div id="fill"></div></div>
 </div>
 <script>
-  var LEVEL_PATH = 'levels/GroundWithHills.glb';
+  // Files the game reads from levels/, the same as the desktop version
+  var FILES = ['levels/GroundWithHills.glb', 'levels/sky.jpg'];
   var canvas = document.getElementById('canvas');
   var loadingEl = document.getElementById('loading');
   var statusEl = document.getElementById('status');
@@ -37,46 +38,54 @@
     loadingEl.style.display = 'flex';
   }
 
-  // Downloads the map with a progress bar. The game reads it from levels/ just like the desktop version,
-  // so replacing the .glb in the repository updates the web game too.
-  function downloadLevel() {
-    return fetch(LEVEL_PATH).then(function (response) {
-      if (!response.ok) throw new Error('HTTP ' + response.status);
-      var total = Number(response.headers.get('Content-Length')) || 0;
-      if (!response.body || !total) return response.arrayBuffer().then(function (buffer) { return new Uint8Array(buffer); });
+  // Downloads the map and sky with a progress bar. They're read from levels/ like on desktop,
+  // so replacing them in the repository updates the web game too.
+  function downloadFiles() {
+    var totals = FILES.map(function () { return 0; });
+    var received = FILES.map(function () { return 0; });
+    function showProgress() {
+      var total = totals.reduce(function (a, b) { return a + b; }, 0);
+      var done = received.reduce(function (a, b) { return a + b; }, 0);
+      if (total > 0) fillEl.style.width = Math.min(100, done/total*100) + '%';
+    }
+    return Promise.all(FILES.map(function (path, i) {
+      return fetch(path).then(function (response) {
+        if (!response.ok) throw new Error(path + ': HTTP ' + response.status);
+        totals[i] = Number(response.headers.get('Content-Length')) || 0;
+        if (!response.body) return response.arrayBuffer().then(function (buffer) { return new Uint8Array(buffer); });
 
-      var reader = response.body.getReader();
-      var chunks = [];
-      var received = 0;
-      function pump() {
-        return reader.read().then(function (result) {
-          if (result.done) {
-            var data = new Uint8Array(received);
-            var offset = 0;
-            chunks.forEach(function (chunk) { data.set(chunk, offset); offset += chunk.length; });
-            return data;
-          }
-          chunks.push(result.value);
-          received += result.value.length;
-          fillEl.style.width = Math.min(100, received/total*100) + '%';
-          return pump();
-        });
-      }
-      return pump();
-    });
+        var reader = response.body.getReader();
+        var chunks = [];
+        function pump() {
+          return reader.read().then(function (result) {
+            if (result.done) {
+              var data = new Uint8Array(received[i]);
+              var offset = 0;
+              chunks.forEach(function (chunk) { data.set(chunk, offset); offset += chunk.length; });
+              return data;
+            }
+            chunks.push(result.value);
+            received[i] += result.value.length;
+            showProgress();
+            return pump();
+          });
+        }
+        return pump();
+      });
+    }));
   }
 
   var Module = {
     canvas: canvas,
     preRun: [function () {
       statusEl.textContent = 'Downloading the map...';
-      Module.addRunDependency('level');
-      downloadLevel().then(function (data) {
+      Module.addRunDependency('files');
+      downloadFiles().then(function (files) {
         statusEl.textContent = 'Starting...';
         fillEl.style.width = '100%';
         Module.FS.mkdir('/levels');
-        Module.FS.writeFile('/' + LEVEL_PATH, data);
-        Module.removeRunDependency('level');
+        files.forEach(function (data, i) { Module.FS.writeFile('/' + FILES[i], data); });
+        Module.removeRunDependency('files');
       }).catch(function (error) {
         showMessage('Could not download the map (' + error.message + '). Try reloading the page.');
       });

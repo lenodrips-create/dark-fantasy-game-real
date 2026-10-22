@@ -27,6 +27,8 @@ if(NOT raylib_FOUND)
         URL https://github.com/raysan5/raylib/archive/refs/tags/5.5.tar.gz
     )
     FetchContent_MakeAvailable(raylib)
+    # The sky and some Blender textures are JPGs, which raylib leaves out by default
+    target_compile_definitions(raylib PRIVATE SUPPORT_FILEFORMAT_JPG=1)
 endif()
 
 add_executable(dark_fantasy

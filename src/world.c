@@ -11,11 +11,14 @@
 #define GRID_CELL_SIZE 8.0f     // Collision grid cell size in world units
 #define GRID_MAX_CELLS 512      // Per axis; cells get bigger on huge maps instead
 
-// Moonlight and fog settings for the dark fantasy look
-#define FOG_DENSITY 0.011f
+// Moonlight for the dark fantasy look
 static const Vector3 LIGHT_DIR    = { -0.35f, -0.85f, 0.40f };  // Direction the moonlight travels
 static const Vector3 LIGHT_COLOR   = { 0.62f, 0.66f, 0.82f };
 static const Vector3 AMBIENT_COLOR = { 0.36f, 0.36f, 0.46f };
+
+// The sky image covers half the horizon and is mirrored for the other half, so its edges always line up.
+// Its bottom edge sits a little below the horizon, its top edge at the zenith.
+#define SKY_BOTTOM -0.15f   // Elevation in radians
 
 // Desktop runs OpenGL 3.3, the browser build WebGL 2 (OpenGL ES 3.0)
 #if defined(__EMSCRIPTEN__)
@@ -31,15 +34,12 @@ static const char *LIT_VS =
     "in vec3 vertexNormal;\n"
     "in vec4 vertexColor;\n"
     "uniform mat4 mvp;\n"
-    "uniform mat4 matModel;\n"
     "uniform mat4 matNormal;\n"
-    "out vec3 fragPosition;\n"
     "out vec2 fragTexCoord;\n"
     "out vec4 fragColor;\n"
     "out vec3 fragNormal;\n"
     "void main()\n"
     "{\n"
-    "    fragPosition = vec3(matModel*vec4(vertexPosition, 1.0));\n"
     "    fragTexCoord = vertexTexCoord;\n"
     "    fragColor = vertexColor;\n"
     "    fragNormal = normalize(vec3(matNormal*vec4(vertexNormal, 0.0)));\n"
@@ -48,18 +48,14 @@ static const char *LIT_VS =
 
 static const char *LIT_FS =
     GLSL_HEADER
-    "in vec3 fragPosition;\n"
     "in vec2 fragTexCoord;\n"
     "in vec4 fragColor;\n"
     "in vec3 fragNormal;\n"
     "uniform sampler2D texture0;\n"
     "uniform vec4 colDiffuse;\n"
-    "uniform vec3 viewPos;\n"
     "uniform vec3 lightDir;\n"
     "uniform vec3 lightColor;\n"
     "uniform vec3 ambientColor;\n"
-    "uniform vec3 fogColor;\n"
-    "uniform float fogDensity;\n"
     "out vec4 finalColor;\n"
     "void main()\n"
     "{\n"
@@ -68,10 +64,36 @@ static const char *LIT_FS =
     "    vec3 n = normalize(fragNormal);\n"
     "    if (!gl_FrontFacing) n = -n;\n"  // Blender materials are double sided
     "    float diffuse = max(dot(n, -lightDir), 0.0);\n"
-    "    vec3 lit = texel.rgb*(ambientColor + lightColor*diffuse);\n"
-    "    float d = length(viewPos - fragPosition)*fogDensity;\n"
-    "    float fog = clamp(exp(-d*d), 0.0, 1.0);\n"
-    "    finalColor = vec4(mix(fogColor, lit, fog), 1.0);\n"
+    "    finalColor = vec4(texel.rgb*(ambientColor + lightColor*diffuse), 1.0);\n"
+    "}\n";
+
+// Drawn on a cube around the camera: the direction to each pixel picks the spot in the sky image,
+// so the sky stays fixed to the world when turning and never gets closer when walking
+static const char *SKY_VS =
+    GLSL_HEADER
+    "in vec3 vertexPosition;\n"
+    "uniform mat4 mvp;\n"
+    "out vec3 fragDirection;\n"
+    "void main()\n"
+    "{\n"
+    "    fragDirection = vertexPosition;\n"
+    "    gl_Position = mvp*vec4(vertexPosition, 1.0);\n"
+    "}\n";
+
+static const char *SKY_FS =
+    GLSL_HEADER
+    "in vec3 fragDirection;\n"
+    "uniform sampler2D texture0;\n"
+    "uniform float skyBottom;\n"
+    "out vec4 finalColor;\n"
+    "void main()\n"
+    "{\n"
+    "    const float PI = 3.14159265;\n"
+    "    vec3 d = normalize(fragDirection);\n"
+    "    float u = abs(atan(d.x, d.z))/PI;\n"   // 0..1 across half the horizon, mirrored for the other half
+    "    float elevation = asin(clamp(d.y, -1.0, 1.0));\n"
+    "    float v = clamp(1.0 - (elevation - skyBottom)/(0.5*PI - skyBottom), 0.0, 1.0);\n"
+    "    finalColor = vec4(texture(texture0, vec2(u, v)).rgb, 1.0);\n"
     "}\n";
 
 // Scans the glTF JSON for materials whose alphaMode is BLEND or MASK (leaves, tree line cards).
@@ -231,7 +253,7 @@ static void BuildCollisionGrid(World *world, const bool *alphaMaterial)
     free(fill);
 }
 
-bool WorldLoad(World *world, const char *path)
+bool WorldLoad(World *world, const char *path, const char *skyPath)
 {
     memset(world, 0, sizeof(*world));
 
@@ -239,15 +261,24 @@ bool WorldLoad(World *world, const char *path)
     if (world->model.meshCount == 0) return false;
 
     world->shader = LoadShaderFromMemory(LIT_VS, LIT_FS);
-    world->locViewPos = GetShaderLocation(world->shader, "viewPos");
-    float fogDensity = FOG_DENSITY;
     Vector3 lightDir = Vector3Normalize(LIGHT_DIR);
     SetShaderValue(world->shader, GetShaderLocation(world->shader, "lightDir"), &lightDir, SHADER_UNIFORM_VEC3);
     SetShaderValue(world->shader, GetShaderLocation(world->shader, "lightColor"), &LIGHT_COLOR, SHADER_UNIFORM_VEC3);
     SetShaderValue(world->shader, GetShaderLocation(world->shader, "ambientColor"), &AMBIENT_COLOR, SHADER_UNIFORM_VEC3);
-    Vector4 fogColor = ColorNormalize(WORLD_SKY_COLOR);
-    SetShaderValue(world->shader, GetShaderLocation(world->shader, "fogColor"), &fogColor, SHADER_UNIFORM_VEC3);
-    SetShaderValue(world->shader, GetShaderLocation(world->shader, "fogDensity"), &fogDensity, SHADER_UNIFORM_FLOAT);
+
+    // Sky (optional: without the image the clear color shows instead)
+    world->skyTexture = LoadTexture(skyPath);
+    if (world->skyTexture.id > 0)
+    {
+        SetTextureFilter(world->skyTexture, TEXTURE_FILTER_BILINEAR);
+        SetTextureWrap(world->skyTexture, TEXTURE_WRAP_CLAMP);
+        world->skyMesh = GenMeshCube(10.0f, 10.0f, 10.0f);
+        world->skyMaterial = LoadMaterialDefault();
+        world->skyMaterial.shader = LoadShaderFromMemory(SKY_VS, SKY_FS);
+        world->skyMaterial.maps[MATERIAL_MAP_ALBEDO].texture = world->skyTexture;
+        float skyBottom = SKY_BOTTOM;
+        SetShaderValue(world->skyMaterial.shader, GetShaderLocation(world->skyMaterial.shader, "skyBottom"), &skyBottom, SHADER_UNIFORM_FLOAT);
+    }
 
     Model *model = &world->model;
     for (int i = 0; i < model->materialCount; i++)
@@ -286,19 +317,29 @@ void WorldUnload(World *world)
     }
     UnloadModel(world->model);
     UnloadShader(world->shader);
+    if (world->skyTexture.id > 0)
+    {
+        UnloadMesh(world->skyMesh);
+        UnloadMaterial(world->skyMaterial);     // Also unloads the sky shader and texture
+    }
     free(world->triangles);
     free(world->cellStart);
     free(world->cellItems);
     memset(world, 0, sizeof(*world));
 }
 
-void WorldBeginFrame(const World *world, Camera3D camera)
+void WorldDraw(const World *world, Camera3D camera)
 {
-    SetShaderValue(world->shader, world->locViewPos, &camera.position, SHADER_UNIFORM_VEC3);
-}
+    if (world->skyTexture.id > 0)
+    {
+        // Follows the camera's position but not its rotation, and writes no depth so everything draws over it
+        rlDisableDepthMask();
+        rlDisableBackfaceCulling();
+        DrawMesh(world->skyMesh, world->skyMaterial, MatrixTranslate(camera.position.x, camera.position.y, camera.position.z));
+        rlEnableBackfaceCulling();
+        rlEnableDepthMask();
+    }
 
-void WorldDraw(const World *world)
-{
     // Leaves and tree cards are single quads, so draw both sides of everything
     rlDisableBackfaceCulling();
     DrawModel(world->model, (Vector3){ 0 }, 1.0f, WHITE);

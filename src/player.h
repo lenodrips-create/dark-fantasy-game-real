@@ -5,8 +5,8 @@
 #include "world.h"
 #include <stdbool.h>
 
-// Standing height of the stickman. The tallest gravestones are about 2.5 units, so this is a bit taller.
-#define PLAYER_HEIGHT 2.8f
+// Standing height of the stickman, about half the tallest gravestones (2.5 units)
+#define PLAYER_HEIGHT 1.4f
 
 typedef struct Player {
     Vector3 spawn;

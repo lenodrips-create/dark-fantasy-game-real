@@ -4,24 +4,24 @@
 
 #include <math.h>
 
-#define PLAYER_RADIUS  0.35f
-#define STEP_HEIGHT    0.45f    // Highest ledge the player walks up without jumping
-#define WALK_SPEED     4.5f
-#define SPRINT_SPEED   9.0f
-#define JUMP_SPEED     6.5f
+#define PLAYER_RADIUS  0.2f
+#define STEP_HEIGHT    0.3f     // Highest ledge the player walks up without jumping
+#define WALK_SPEED     3.5f
+#define SPRINT_SPEED   8.0f
+#define JUMP_SPEED     5.0f
 #define GRAVITY        20.0f
 #define TURN_RATE      12.0f
 #define FALL_LIMIT     -60.0f   // Respawn if we ever drop out of the world
 
 // Stickman proportions (feet at 0, adds up to PLAYER_HEIGHT standing straight)
-#define THIGH_LENGTH     0.68f
-#define SHIN_LENGTH      0.68f
-#define SPINE_LENGTH     0.86f
-#define UPPER_ARM_LENGTH 0.56f
-#define FOREARM_LENGTH   0.52f
-#define HEAD_RADIUS      0.28f
-#define LIMB_RADIUS      0.06f
-#define STRIDE_RATE      2.3f   // Walk cycle radians per unit travelled
+#define THIGH_LENGTH     0.34f
+#define SHIN_LENGTH      0.34f
+#define SPINE_LENGTH     0.43f
+#define UPPER_ARM_LENGTH 0.28f
+#define FOREARM_LENGTH   0.26f
+#define HEAD_RADIUS      0.14f
+#define LIMB_RADIUS      0.035f
+#define STRIDE_RATE      4.6f   // Walk cycle radians per unit travelled
 
 static const Color BONE_COLOR = { 228, 222, 206, 255 };
 
@@ -56,7 +56,7 @@ static bool TryMove(Player *player, const World *world, float dx, float dz)
     Vector3 side = { -dir.z, 0.0f, dir.x };
 
     // Feel ahead at knee, waist and chest height, across the width of the body
-    static const float heights[] = { STEP_HEIGHT + 0.1f, 1.3f, 2.2f };
+    static const float heights[] = { STEP_HEIGHT + 0.1f, 0.75f, 1.15f };
     static const float offsets[] = { -0.7f, 0.0f, 0.7f };
     for (int h = 0; h < 3; h++)
     {
@@ -231,8 +231,8 @@ void PlayerDraw(const Player *player, const Stickman *stickman)
     float lean = swing*0.3f;
     Vector3 spine = { 0.0f, cosf(lean), sinf(lean) };
     Vector3 neck = Vector3Add(hip, Vector3Scale(spine, SPINE_LENGTH));
-    Vector3 shoulder = Vector3Add(hip, Vector3Scale(spine, SPINE_LENGTH - 0.1f));
-    Vector3 head = Vector3Add(neck, Vector3Scale(spine, HEAD_RADIUS + 0.03f));
+    Vector3 shoulder = Vector3Add(hip, Vector3Scale(spine, SPINE_LENGTH - 0.05f));
+    Vector3 head = Vector3Add(neck, Vector3Scale(spine, HEAD_RADIUS + 0.015f));
 
     Vector3 hipW = ToWorld(player, hip);
     DrawBone(stickman, hipW, ToWorld(player, neck), LIMB_RADIUS*1.2f);
@@ -260,7 +260,7 @@ void PlayerDraw(const Player *player, const Stickman *stickman)
 
     // Soft blob shadow on the ground, shrinking as we jump
     float height = fmaxf(player->position.y - player->groundY, 0.0f);
-    float shadowRadius = fmaxf(0.55f - height*0.15f, 0.2f);
+    float shadowRadius = fmaxf(0.28f - height*0.15f, 0.1f);
     Vector3 shadow = { player->position.x, player->groundY + 0.03f, player->position.z };
     DrawCylinder(shadow, shadowRadius, shadowRadius, 0.01f, 20, Fade(BLACK, 0.45f));
 }

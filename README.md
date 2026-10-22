@@ -9,7 +9,7 @@ A third-person prototype written in C with [raylib](https://www.raylib.com/). Yo
 | Key | Action |
 | --- | --- |
 | **W A S D** | Move (relative to where the camera looks) |
-| **Mouse** | Look around (orbit the camera) |
+| **Mouse** | Look around (orbit the camera; move it up to look at the sky) |
 | **Mouse wheel** | Zoom in / out |
 | **Shift** | Sprint |
 | **Space** | Jump |
@@ -40,7 +40,7 @@ The build copies `levels/` next to the executable, so you can also start the gam
 
 ### Web version
 
-The browser version is the same C code compiled to WebAssembly with [Emscripten](https://emscripten.org/docs/getting_started/downloads.html). GitHub Pages serves `index.html`, which loads `web/dark_fantasy.js` + `web/dark_fantasy.wasm` and downloads the map from `levels/`.
+The browser version is the same C code compiled to WebAssembly with [Emscripten](https://emscripten.org/docs/getting_started/downloads.html). GitHub Pages serves `index.html`, which loads `web/dark_fantasy.js` + `web/dark_fantasy.wasm` and downloads the map and sky from `levels/`.
 
 After changing the C code, rebuild the web files and commit them:
 
@@ -49,7 +49,7 @@ emcmake cmake -S . -B build-web
 cmake --build build-web
 ```
 
-This writes straight into `web/`. Replacing the map in `levels/` needs no rebuild, the web version picks it up on the next page load.
+This writes straight into `web/`. Replacing the map or sky in `levels/` needs no rebuild, the web version picks them up on the next page load.
 
 ## Changing the map
 
@@ -58,6 +58,11 @@ Export from Blender with **File > Export > glTF 2.0**, format **glTF Binary (.gl
 - Use **+Y Up** (the exporter default). Object positions, rotations and scales are applied when the map loads.
 - Every mesh is solid: the player stands on it and bumps into it. Materials using **Alpha Blend** or **Alpha Clip** (leaves, tree line cards) are treated as foliage and don't block anything.
 - The spawn point is `SPAWN_POINT` at the top of `src/main.c`. It's currently the middle aisle of the graveyard, facing north toward the cliff gap.
+- The graveyard in `levels/GroundWithHills.glb` was widened after export (ground 28 units across instead of 14, cliffs moved out to match, graves and trees spread out). Your Blender file doesn't have that change, so a fresh export brings back the narrow graveyard unless you widen it in Blender too.
+
+## Sky
+
+The sky is `levels/sky.jpg`. It's wrapped around the world: the image covers half the horizon and is mirrored for the other half, with its bottom edge just under the horizon and its top at the zenith. It's fixed to the world's directions, so it pans when you turn the camera and never moves when you walk. Swap in another image to change it.
 
 ## Code layout
 
@@ -65,7 +70,7 @@ Export from Blender with **File > Export > glTF 2.0**, format **glTF Binary (.gl
 | --- | --- |
 | `src/main.c` | Window, input, third-person mouse camera, HUD |
 | `src/player.c` | Stickman movement, collision, jumping and the procedural walk animation |
-| `src/world.c` | Loads the `.glb`, moonlight + fog shader, collision raycasts against the map |
+| `src/world.c` | Loads the `.glb`, moonlight shader, the sky, collision raycasts against the map |
 | `index.html`, `web/` | Browser version served by GitHub Pages |
 
-The stickman is about 2.8 units tall. The tallest gravestones are about 2.5.
+The stickman is about 1.4 units tall. The gravestones are 1.2 to 2.5.

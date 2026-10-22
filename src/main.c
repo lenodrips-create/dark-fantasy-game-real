@@ -13,17 +13,18 @@
 #endif
 
 #define LEVEL_PATH "levels/GroundWithHills.glb"
+#define SKY_PATH   "levels/sky.jpg"
 
 // Middle aisle of the graveyard, between the rows of graves, facing north toward the cliff gap
 static const Vector3 SPAWN_POINT = { 0.0f, 0.0f, 14.0f };
 #define SPAWN_YAW PI
 
 #define MOUSE_SENSITIVITY 0.0035f
-#define CAMERA_HEIGHT     2.3f      // Orbit point above the feet, around the head
-#define CAMERA_MIN_PITCH  -0.25f
+#define CAMERA_HEIGHT     1.2f      // Orbit point above the feet, around the head
+#define CAMERA_MIN_PITCH  -0.6f     // Low enough to look up at the sky over the cliffs
 #define CAMERA_MAX_PITCH  1.35f
-#define CAMERA_MIN_DIST   2.5f
-#define CAMERA_MAX_DIST   16.0f
+#define CAMERA_MIN_DIST   1.5f
+#define CAMERA_MAX_DIST   12.0f
 
 // Third person camera orbiting the player, steered with the mouse
 typedef struct OrbitCamera {
@@ -84,7 +85,7 @@ static void UpdateOrbitCamera(Camera3D *camera, OrbitCamera *orbit, const World 
     // Pull in right away when a cliff or house gets between us and the player, ease back out after
     float allowed = orbit->distance;
     RayCollision hit = WorldRaycast(world, (Ray){ target, dir }, orbit->distance + 0.3f);
-    if (hit.hit) allowed = fmaxf(hit.distance - 0.3f, 0.5f);
+    if (hit.hit) allowed = fmaxf(hit.distance - 0.3f, 0.3f);
 
     if (allowed < orbit->current) orbit->current = allowed;
     else orbit->current += (allowed - orbit->current)*fminf(1.0f, 6.0f*dt);
@@ -165,7 +166,7 @@ static void UpdateDrawFrame(void)
         orbit->yaw -= mouse.x*MOUSE_SENSITIVITY;
         orbit->pitch = Clamp(orbit->pitch + mouse.y*MOUSE_SENSITIVITY, CAMERA_MIN_PITCH, CAMERA_MAX_PITCH);
     }
-    orbit->distance = Clamp(orbit->distance - GetMouseWheelMove()*0.8f, CAMERA_MIN_DIST, CAMERA_MAX_DIST);
+    orbit->distance = Clamp(orbit->distance - GetMouseWheelMove()*0.5f, CAMERA_MIN_DIST, CAMERA_MAX_DIST);
 
     // WASD is relative to where the camera is looking
     Vector3 forward = { -sinf(orbit->yaw), 0.0f, -cosf(orbit->yaw) };
@@ -185,8 +186,7 @@ static void UpdateDrawFrame(void)
     BeginDrawing();
         ClearBackground(WORLD_SKY_COLOR);
         BeginMode3D(game.camera);
-            WorldBeginFrame(&game.world, game.camera);
-            WorldDraw(&game.world);
+            WorldDraw(&game.world, game.camera);
             PlayerDraw(&game.player, &game.stickman);
         EndMode3D();
         DrawHud();
@@ -207,13 +207,13 @@ int main(void)
     DrawText("Loading...", 20, GetScreenHeight() - 40, 20, RAYWHITE);
     EndDrawing();
 
-    game.loaded = WorldLoad(&game.world, LEVEL_PATH);
+    game.loaded = WorldLoad(&game.world, LEVEL_PATH, SKY_PATH);
     if (game.loaded)
     {
         game.stickman = StickmanLoad(game.world.shader);
         PlayerInit(&game.player, &game.world, SPAWN_POINT, SPAWN_YAW);
 
-        game.orbit = (OrbitCamera){ SPAWN_YAW + PI, 0.3f, 7.0f, 7.0f };
+        game.orbit = (OrbitCamera){ SPAWN_YAW + PI, 0.2f, 4.5f, 4.5f };
         game.camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
         game.camera.fovy = 60.0f;
         game.camera.projection = CAMERA_PERSPECTIVE;
