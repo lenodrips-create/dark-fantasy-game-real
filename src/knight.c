@@ -145,7 +145,7 @@ static void PoseParts(const Player *player, Matrix *parts)
         // The hips sink to whichever foot reaches lowest, which makes the bounce
         reach = fmaxf(reach, THIGH_LENGTH*cosf(thigh[i]) + SHIN_LENGTH*cosf(thigh[i] - knee[i]));
     }
-    float bounce = reach - (THIGH_LENGTH + SHIN_LENGTH) + breathe;
+    float bounce = (reach - (THIGH_LENGTH + SHIN_LENGTH))*0.3f + breathe;     // Only a little of the dip, so he doesn't bob down much
 
     float lean = swing*0.45f;
     // The upper body swings with every step: shoulders turn against the hips, without rocking side to side

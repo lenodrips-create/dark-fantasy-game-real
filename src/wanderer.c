@@ -5,7 +5,7 @@
 #define STROLL       0.1575f // Fraction of walking speed
 #define STRIDE_RATE  7.0f   // Its legs are short, so it takes small, quick steps
 #define ARRIVED      0.5f   // Close enough to the destination, in world units
-#define GIVE_UP_TIME 1.0f   // Pick somewhere else after this long blocked (a gravestone, a tree)
+#define GIVE_UP_TIME 0.3f   // Pick somewhere else after this long blocked (a gravestone, a tree)
 
 static float RandomRange(float min, float max)
 {
@@ -42,7 +42,7 @@ void WandererUpdate(Wanderer *wanderer, const World *world, float dt)
     {
         Vector2 toTarget = { wanderer->target.x - body->position.x, wanderer->target.y - body->position.z };
         float distance = Vector2Length(toTarget);
-        if (distance < ARRIVED) wanderer->wait = RandomRange(1.0f, 4.0f);
+        if (distance < ARRIVED) PickTarget(wanderer);    // Keeps walking, straight on to the next spot
         else move = (Vector3){ toTarget.x/distance*STROLL, 0.0f, toTarget.y/distance*STROLL };
     }
 
