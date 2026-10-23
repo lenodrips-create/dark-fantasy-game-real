@@ -70,6 +70,7 @@ Export from Blender with **File > Export > glTF 2.0**, format **glTF Binary (.gl
 
 - **The knight** (`characters/Armor_Halberd.obj`, textured by `Armor_Halberd.png` through `Armor_Halberd.mtl`) is 1.4 units tall. The model has no skeleton, so `src/knight.c` splits its vertices into torso, thighs, shins, upper arms and forearms (the halberd goes with the right hand) and poses them with joint rotations every frame, the way N64-era characters were animated. The split and the joint positions are measured from this model, so a different model needs new numbers there.
 - **The walk** is modeled on Banjo's run in Banjo-Kazooie (Mumbo's Mountain): a forward lean, big quick strides with a high knee lift and a kick back, bent arms pumping against the legs, a small bounce on every step. The shoulders turn against the hips with every step, without rocking side to side. The halberd arm moves less so the weapon stays roughly level. Steps are slow and long, about 1.85 units each. It's hand-built from watching the clip, not extracted from the video.
+- **Bond** (`characters/Bond_Tuxedo.glb`) stands at the start of the dock, off to one side, looking back toward the field. The OBJ came without its textures, so it was converted to a GLB with plain N64-style colors as vertex colors: black jacket, trousers and shoes, a white shirt V and cuffs, skin and dark brown hair. The knight bumps into him.
 - **The hooded figure** is the `Figure` object from the Blender map. The game finds it by its material (`PoeCollector`), lifts it out of the level and makes it walk non-stop between random spots inside the fence, starting beside the dead tree and picking somewhere else as soon as a grave or tree blocks it (`src/wanderer.c`). All its destinations are on the graves' side of the fence, so it never leaves through the gap. It walks slowly with small, quick steps on its two thin legs and swings its arms against them (the staff arm less). Its legs (below the robe) and arms (sleeves, hands and staff) are split off from the rest of the mesh and swung from the hips and shoulders. The knight can't walk through it.
 
 ## Credits
@@ -92,7 +93,7 @@ The sky is `levels/sky.jpg`. It's wrapped around the world: the image covers hal
 | `src/knight.c` | Loads the knight and animates it |
 | `src/wanderer.c` | The hooded figure's roaming |
 | `src/world.c` | Loads the `.glb`, moonlight shader, the sky, collision raycasts against the map |
-| `characters/` | The knight model and its texture |
+| `characters/` | The knight model and its texture, and Bond |
 | `index.html`, `web/` | Browser version served by GitHub Pages |
 
 The knight is 1.4 units tall, the hooded figure 3. The gravestones are 1.2 to 2.5.

@@ -19,6 +19,13 @@
 #define SKY_PATH   "levels/sky.jpg"
 #define KNIGHT_PATH "characters/Armor_Halberd.obj"
 #define MENU_PATH   "menu/opening.glb"
+#define BOND_PATH   "characters/Bond_Tuxedo.glb"
+
+// Bond stands at the start of the dock, off to one side of the walkway, looking back toward the field
+static const Vector3 BOND_SPOT = { 245.8f, 0.0f, -252.9f };
+#define BOND_YAW    -1.369f
+#define BOND_HEIGHT 1.6f
+#define BOND_RADIUS 0.3f
 #define HOODED_FIGURE_MATERIAL "PoeCollector"   // The purple hooded figure in the map, found by its Blender material
 
 // South end of the middle aisle, facing north toward the dead tree, the graves and the fenced entrance
@@ -54,6 +61,10 @@ typedef struct Game {
     World world;
     Knight knight;
     Menu menu;
+    Model bond;
+    float bondScale;
+    bool hasBond;
+    Player bondBody;        // Only for his spot on the ground, his shadow and bumping into him
     bool inMenu;            // Title screen first, the graveyard after START
     Player player;
     Wanderer hoodedFigure;
@@ -143,6 +154,18 @@ static void DrawHud(void)
         DrawRectangle(0, GetScreenHeight()/2 - 24, GetScreenWidth(), 48, Fade(BLACK, 0.45f));
         DrawText(text, (GetScreenWidth() - width)/2, GetScreenHeight()/2 - 12, 24, RAYWHITE);
     }
+}
+
+static void DrawBond(void)
+{
+    const Player *body = &game.bondBody;
+    float s = game.bondScale;
+    Matrix transform = MatrixMultiply(MatrixScale(s, s, s), MatrixRotateY(body->yaw));
+    transform = MatrixMultiply(transform, MatrixTranslate(body->position.x, body->position.y, body->position.z));
+    rlDisableBackfaceCulling();
+    for (int m = 0; m < game.bond.meshCount; m++) DrawMesh(game.bond.meshes[m], game.bond.materials[game.bond.meshMaterial[m]], transform);
+    rlEnableBackfaceCulling();
+    PlayerDrawShadow(body, 0.35f);
 }
 
 // Keeps two characters from walking through each other by pushing the first one out
@@ -246,6 +269,7 @@ static void UpdateDrawFrame(void)
         WandererUpdate(&game.hoodedFigure, &game.world, dt);
         PushApart(&game.player, KNIGHT_RADIUS, &game.hoodedFigure.body, HOODED_FIGURE_RADIUS);
     }
+    if (game.hasBond) PushApart(&game.player, KNIGHT_RADIUS, &game.bondBody, BOND_RADIUS);
     UpdateOrbitCamera(&game.camera, orbit, &game.world, game.player.position, dt);
 
     BeginDrawing();
@@ -254,6 +278,7 @@ static void UpdateDrawFrame(void)
             WorldDraw(&game.world, game.camera);
             KnightDraw(&game.knight, &game.player);
             DrawHoodedFigure(&game.hoodedFigure, &game.world);
+            if (game.hasBond) DrawBond();
         EndMode3D();
         DrawHud();
     EndDrawing();
@@ -290,6 +315,16 @@ int main(void)
         game.camera.projection = CAMERA_PERSPECTIVE;
         rlSetClipPlanes(0.05, 2000.0);
 
+        game.hasBond = FileExists(BOND_PATH);
+        if (game.hasBond)
+        {
+            game.bond = LoadModel(BOND_PATH);
+            for (int i = 0; i < game.bond.materialCount; i++) game.bond.materials[i].shader = game.world.shader;
+            BoundingBox box = GetModelBoundingBox(game.bond);
+            game.bondScale = BOND_HEIGHT/fmaxf(box.max.y - box.min.y, 0.001f);
+            PlayerInit(&game.bondBody, &game.world, BOND_SPOT, BOND_YAW);
+        }
+
         game.inMenu = MenuLoad(&game.menu, MENU_PATH);     // Straight into the game if the menu is missing
     }
 
@@ -307,6 +342,7 @@ int main(void)
     if (game.loaded)
     {
         if (game.inMenu) MenuUnload(&game.menu);
+        if (game.hasBond) UnloadModel(game.bond);
         KnightUnload(&game.knight);
         WorldUnload(&game.world);
     }
