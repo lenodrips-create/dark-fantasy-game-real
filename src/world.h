@@ -22,7 +22,9 @@ typedef struct World {
     bool *isActor;          // Per mesh
     bool *isHidden;         // Per mesh: invisible walls, solid but not drawn
     bool *isMist;           // Per mesh: drawn see-through after everything else
+    bool *isLamplit;        // Per mesh: lit from inside, full brightness
     int alphaCutoffLoc;     // Shader uniform: alpha below which pixels are dropped
+    int lamplitLoc;         // Shader uniform: 1 for lamplit meshes
     bool hasActor;
     int actorMesh;
     Vector3 actorOrigin;    // Where it stood in the map, between its feet
