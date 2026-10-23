@@ -31,7 +31,8 @@
     'levels/sky.jpg',
     'characters/Armor_Halberd.obj',
     'characters/Armor_Halberd.mtl',
-    'characters/Armor_Halberd.png'
+    'characters/Armor_Halberd.png',
+    'menu/opening.glb'
   ];
   // Browsers keep old copies of these files, so the game code is always fetched fresh (it's small) and the
   // big files are re-checked with the server on every load (only downloaded again when they changed)
@@ -95,6 +96,7 @@
         fillEl.style.width = '100%';
         Module.FS.mkdir('/levels');
         Module.FS.mkdir('/characters');
+        Module.FS.mkdir('/menu');
         files.forEach(function (data, i) { Module.FS.writeFile('/' + FILES[i], data); });
         Module.removeRunDependency('files');
       }).catch(function (error) {

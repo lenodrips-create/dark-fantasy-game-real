@@ -3,6 +3,7 @@
 #include "rlgl.h"
 
 #include "knight.h"
+#include "menu.h"
 #include "player.h"
 #include "wanderer.h"
 #include "world.h"
@@ -17,6 +18,7 @@
 #define LEVEL_PATH "levels/GroundWithHills.glb"
 #define SKY_PATH   "levels/sky.jpg"
 #define KNIGHT_PATH "characters/Armor_Halberd.obj"
+#define MENU_PATH   "menu/opening.glb"
 #define HOODED_FIGURE_MATERIAL "PoeCollector"   // The purple hooded figure in the map, found by its Blender material
 
 // South end of the middle aisle, facing north toward the dead tree, the graves and the fenced entrance
@@ -51,6 +53,8 @@ typedef struct Game {
     bool quit;
     World world;
     Knight knight;
+    Menu menu;
+    bool inMenu;            // Title screen first, the graveyard after START
     Player player;
     Wanderer hoodedFigure;
     OrbitCamera orbit;
@@ -183,6 +187,20 @@ static void UpdateDrawFrame(void)
         return;
     }
 
+    if (game.inMenu)
+    {
+#if !defined(__EMSCRIPTEN__)
+        if (IsKeyPressed(KEY_ESCAPE)) game.quit = true;
+#endif
+        if (MenuUpdateDraw(&game.menu))
+        {
+            game.inMenu = false;
+            DisableCursor();
+            game.ignoreMouseDelta = true;
+        }
+        return;
+    }
+
     float dt = fminf(GetFrameTime(), 0.05f);
     OrbitCamera *orbit = &game.orbit;
 
@@ -271,6 +289,8 @@ int main(void)
         game.camera.fovy = 60.0f;
         game.camera.projection = CAMERA_PERSPECTIVE;
         rlSetClipPlanes(0.05, 2000.0);
+
+        game.inMenu = MenuLoad(&game.menu, MENU_PATH);     // Straight into the game if the menu is missing
     }
 
 #if defined(__EMSCRIPTEN__)
@@ -278,7 +298,7 @@ int main(void)
     emscripten_set_mousemove_callback(EMSCRIPTEN_EVENT_TARGET_DOCUMENT, NULL, 1, OnWebMouseMove);
     emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
 #else
-    if (game.loaded) DisableCursor();
+    if (game.loaded && !game.inMenu) DisableCursor();
     game.ignoreMouseDelta = true;
     SetTargetFPS(144);
 
@@ -286,6 +306,7 @@ int main(void)
 
     if (game.loaded)
     {
+        if (game.inMenu) MenuUnload(&game.menu);
         KnightUnload(&game.knight);
         WorldUnload(&game.world);
     }

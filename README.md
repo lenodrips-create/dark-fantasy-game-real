@@ -4,6 +4,10 @@ A third-person prototype written in C with [raylib](https://www.raylib.com/). Yo
 
 **Play it in your browser:** https://lenodrips-create.github.io/dark-fantasy-game-real/ (click the game to grab the mouse)
 
+## Title screen
+
+The game opens on `menu/opening.glb`: the camera eases in on the treasure chest in front of the waterfall, whose texture scrolls down so the water falls, with MOONSHADE above the chest. Click **START** (or press Enter) to go to the graveyard. `menu/opening.glb` is the Blender export with its texture tiling (KHR_texture_transform, which raylib doesn't apply) baked into the UVs.
+
 ## Controls
 
 | Key | Action |
@@ -59,7 +63,7 @@ Export from Blender with **File > Export > glTF 2.0**, format **glTF Binary (.gl
 - Every mesh is solid: the player stands on it and bumps into it. Materials using **Alpha Blend** or **Alpha Clip** (leaves, tree line cards) are treated as foliage and don't block anything.
 - The spawn point is `SPAWN_POINT` at the top of `src/main.c`. It's currently the south end of the middle aisle, facing north toward the dead tree and the fenced entrance.
 - Meshes whose material name contains `Fence` collide as solid boxes, so nothing slips between their thin rails.
-- `levels/GroundWithHills.glb` was changed after export: the graveyard was widened (ground 28 units across instead of 14, cliffs moved out to match, graves and trees spread out), all 12 gravestones were replaced with the `Gravestone.obj` model (1.8 units tall, "R.I.P" side facing north, over the dirt of each grave), a dead tree (9 units tall) was added in the middle of the graves, the flat graveyard ground was replaced with N64-style rolling hills (a coarse 1-unit triangle grid with bumps up to about 1 unit, lighting baked into vertex colors, kept flat under the graves, the tree, the fence and along the edges), and a cemetery fence (iron railings between stone pillars, 1.6 units tall, 12 segments) was added across the graveyard near the entrance, with an iron archway over the 4-unit gap in the middle. Your Blender file has none of these changes, so a fresh export brings back the old graveyard unless you make them in Blender too.
+- `levels/GroundWithHills.glb` was changed after export: the graveyard was widened (ground 28 units across instead of 14, cliffs moved out to match, graves and trees spread out), all 12 gravestones were replaced with the `Gravestone.obj` model (1.8 units tall, "R.I.P" side facing north, over the dirt of each grave), a dead tree (9 units tall) was added in the middle of the graves, the flat graveyard ground was replaced with N64-style rolling hills (a coarse 1-unit triangle grid with bumps up to about 1 unit, lighting baked into vertex colors, kept flat under the graves, the tree, the fence and along the edges), and a cemetery fence (iron railings between stone pillars, 1.6 units tall, 12 segments) was added across the graveyard near the entrance, with an iron archway over the 4-unit gap in the middle and a black iron cross hanging inside the arch. Your Blender file has none of these changes, so a fresh export brings back the old graveyard unless you make them in Blender too.
 
 ## Characters
 
@@ -81,6 +85,7 @@ The sky is `levels/sky.jpg`. It's wrapped around the world: the image covers hal
 | File | What it does |
 | --- | --- |
 | `src/main.c` | Window, input, third-person mouse camera, HUD |
+| `src/menu.c` | Title screen |
 | `src/player.c` | Character movement, collision, jumping and the walk cycle timing |
 | `src/knight.c` | Loads the knight and animates it |
 | `src/wanderer.c` | The hooded figure's roaming |
