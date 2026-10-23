@@ -26,7 +26,7 @@ static const Vector3 SPAWN_POINT = { 0.0f, 0.0f, 24.0f };
 // The hooded figure strolls around the graveyard inside the fence (x, z, width, depth). The fence is at z = 3 and
 // every destination is on this side of it, so walking straight to one never leads out through the gap.
 static const Rectangle GRAVEYARD_AREA = { -13.0f, 4.0f, 26.0f, 22.0f };
-static const Vector3 HOODED_FIGURE_START = { 2.0f, 0.0f, 5.0f };
+static const Vector3 HOODED_FIGURE_START = { 1.5f, 0.0f, 20.2f };     // Beside the dead tree, on the side facing the spawn
 
 #define KNIGHT_RADIUS        0.35f
 #define HOODED_FIGURE_RADIUS 0.6f   // Its robe; the outstretched arms are left out

@@ -33,6 +33,9 @@
     'characters/Armor_Halberd.mtl',
     'characters/Armor_Halberd.png'
   ];
+  // Browsers keep old copies of these files, so the game code is always fetched fresh (it's small) and the
+  // big files are re-checked with the server on every load (only downloaded again when they changed)
+  var LOAD_STAMP = Date.now();
   var canvas = document.getElementById('canvas');
   var loadingEl = document.getElementById('loading');
   var statusEl = document.getElementById('status');
@@ -55,7 +58,7 @@
       if (total > 0) fillEl.style.width = Math.min(100, done/total*100) + '%';
     }
     return Promise.all(FILES.map(function (path, i) {
-      return fetch(path).then(function (response) {
+      return fetch(path, { cache: 'no-cache' }).then(function (response) {
         if (!response.ok) throw new Error(path + ': HTTP ' + response.status);
         totals[i] = Number(response.headers.get('Content-Length')) || 0;
         if (!response.body) return response.arrayBuffer().then(function (buffer) { return new Uint8Array(buffer); });
@@ -83,6 +86,7 @@
 
   var Module = {
     canvas: canvas,
+    locateFile: function (path, prefix) { return prefix + path + '?v=' + LOAD_STAMP; },
     preRun: [function () {
       statusEl.textContent = 'Downloading the map...';
       Module.addRunDependency('files');
@@ -112,7 +116,7 @@
     showMessage('This game needs WebGL 2. Try a recent Chrome, Firefox, Edge or Safari.');
   } else {
     var script = document.createElement('script');
-    script.src = 'web/dark_fantasy.js';
+    script.src = 'web/dark_fantasy.js?v=' + LOAD_STAMP;
     script.onerror = function () { showMessage('Could not load the game files. Try reloading the page.'); };
     document.body.appendChild(script);
   }
