@@ -21,6 +21,8 @@ typedef struct Player {
     float walkPhase;    // Advances with distance travelled, drives the walk cycle
     float strideRate;   // Walk cycle radians per unit travelled: lower means longer, slower steps
     float stride;       // Smoothed swing amplitude: 0 standing still, larger when sprinting
+    bool climbing;      // Hanging on to the beanstalk
+    float climbPhase;   // Advances with distance climbed, drives the climb cycle
 } Player;
 
 void PlayerInit(Player *player, const World *world, Vector3 spawn, float yaw);
@@ -28,6 +30,16 @@ void PlayerRespawn(Player *player, const World *world);
 
 // move is a world-space direction on the XZ plane with length 0..1
 void PlayerUpdate(Player *player, const World *world, Vector3 move, bool sprint, bool jump, float dt);
+
+// Grabs on to a vertical pole (the beanstalk) whose axis runs up through (axis.x, axis.z), facing it from where we stand
+void PlayerStartClimb(Player *player, Vector3 axis, float radius);
+
+// Climbs the pole: up is -1..1 (down to up), around -1..1 moves sideways around it. Climbing down to the ground lets go.
+// The climb goes no higher than maxY.
+void PlayerClimb(Player *player, const World *world, Vector3 axis, float radius, float up, float around, float maxY, float dt);
+
+// Lets go of the pole with a small jump away from it
+void PlayerJumpOffClimb(Player *player, Vector3 axis);
 
 // Blob shadow under a character, radius in world units
 void PlayerDrawShadow(const Player *player, float radius);

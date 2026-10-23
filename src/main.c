@@ -26,6 +26,14 @@ static const Vector3 BOND_SPOT = { 245.8f, 0.0f, -252.9f };
 #define BOND_YAW    -1.369f
 #define BOND_HEIGHT 1.6f
 #define BOND_RADIUS 0.3f
+// The giant corn stalk in the field: walk into it to grab on and climb. A quarter of the way up the screen turns white.
+static const Vector3 BEANSTALK_BASE = { -112.6f, 13.4f, -302.5f };
+#define BEANSTALK_RADIUS   1.2f     // Where the knight hangs on, from the stalk's middle (the stalk is about 1.2 to 1.5 thick)
+#define BEANSTALK_HEIGHT   150.0f
+#define BEANSTALK_GRAB     0.9f     // How close to its surface the player has to be to grab on
+#define WHITEOUT_HEIGHT    (BEANSTALK_HEIGHT*0.25f)
+#define WHITEOUT_TIME      2.0f     // Seconds for the screen to fade to white
+
 #define HOODED_FIGURE_MATERIAL "PoeCollector"   // The purple hooded figure in the map, found by its Blender material
 
 // South end of the middle aisle, facing north toward the dead tree, the graves and the fenced entrance
@@ -71,6 +79,7 @@ typedef struct Game {
     OrbitCamera orbit;
     Camera3D camera;
     bool ignoreMouseDelta;  // The first delta after capturing the cursor can be a big jump
+    float whiteout;         // 0..1, how far the screen has faded to white at the top of the climb
 } Game;
 
 // Global so the browser's frame callback can reach it
@@ -129,6 +138,8 @@ static void DrawHud(void)
         "Mouse - look around",
         "Shift - sprint",
         "Space - jump",
+        "Walk into the beanstalk - climb",
+        "W / S - up / down, Space - let go",
         "Mouse wheel - zoom",
         "R - back to spawn",
 #if defined(__EMSCRIPTEN__)
@@ -139,7 +150,7 @@ static void DrawHud(void)
     };
     const int count = sizeof(lines)/sizeof(lines[0]);
 
-    DrawRectangle(10, 10, 230, 16 + count*20, Fade(BLACK, 0.45f));
+    DrawRectangle(10, 10, 330, 16 + count*20, Fade(BLACK, 0.45f));
     for (int i = 0; i < count; i++) DrawText(lines[i], 20, 18 + i*20, 18, (Color){ 210, 205, 190, 255 });
     DrawFPS(GetScreenWidth() - 90, 10);
 
@@ -261,9 +272,33 @@ static void UpdateDrawFrame(void)
     if (IsKeyDown(KEY_A)) move = Vector3Subtract(move, right);
     if (Vector3Length(move) > 1.0f) move = Vector3Normalize(move);
 
-    if (IsKeyPressed(KEY_R)) PlayerRespawn(&game.player, &game.world);
+    if (IsKeyPressed(KEY_R))
+    {
+        PlayerRespawn(&game.player, &game.world);
+        game.whiteout = 0.0f;
+    }
     bool sprint = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-    PlayerUpdate(&game.player, &game.world, move, sprint, IsKeyPressed(KEY_SPACE), dt);
+    Player *player = &game.player;
+    Vector2 toStalk = { BEANSTALK_BASE.x - player->position.x, BEANSTALK_BASE.z - player->position.z };
+    float stalkDistance = Vector2Length(toStalk);
+    if (!player->climbing && (stalkDistance < BEANSTALK_RADIUS + BEANSTALK_GRAB) && (player->position.y < BEANSTALK_BASE.y + BEANSTALK_HEIGHT) &&
+        (Vector3Length(move) > 0.1f) && ((move.x*toStalk.x + move.z*toStalk.y) > 0.5f*stalkDistance*Vector3Length(move)))
+    {
+        PlayerStartClimb(player, BEANSTALK_BASE, BEANSTALK_RADIUS);
+    }
+
+    if (player->climbing)
+    {
+        // W and S climb whichever way the camera faces; A and D go around the stalk
+        float up = (IsKeyDown(KEY_W)? 1.0f : 0.0f) - (IsKeyDown(KEY_S)? 1.0f : 0.0f);
+        float around = (IsKeyDown(KEY_D)? 1.0f : 0.0f) - (IsKeyDown(KEY_A)? 1.0f : 0.0f);
+        if (game.whiteout > 0.0f) up = around = 0.0f;
+        if (IsKeyPressed(KEY_SPACE) && (game.whiteout <= 0.0f)) PlayerJumpOffClimb(player, BEANSTALK_BASE);
+        else PlayerClimb(player, &game.world, BEANSTALK_BASE, BEANSTALK_RADIUS, up, around, BEANSTALK_BASE.y + WHITEOUT_HEIGHT, dt);
+
+        if (player->climbing && (player->position.y >= BEANSTALK_BASE.y + WHITEOUT_HEIGHT - 0.01f)) game.whiteout = fminf(game.whiteout + dt/WHITEOUT_TIME, 1.0f);
+    }
+    else PlayerUpdate(player, &game.world, move, sprint, IsKeyPressed(KEY_SPACE), dt);
     if (game.world.hasActor)
     {
         WandererUpdate(&game.hoodedFigure, &game.world, dt);
@@ -281,6 +316,7 @@ static void UpdateDrawFrame(void)
             if (game.hasBond) DrawBond();
         EndMode3D();
         DrawHud();
+        if (game.whiteout > 0.0f) DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(WHITE, game.whiteout));
     EndDrawing();
 }
 

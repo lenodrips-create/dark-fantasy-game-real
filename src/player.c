@@ -12,6 +12,9 @@
 #define GRAVITY        20.0f
 #define TURN_RATE      12.0f
 #define FALL_LIMIT     -60.0f   // Respawn if we ever drop out of the world
+#define CLIMB_SPEED    3.0f     // Up and down the beanstalk
+#define CLIMB_REACH    0.45f    // Gap between the pole's surface and the feet while hanging on
+#define CLIMB_RATE     2.2f     // Climb cycle radians per unit climbed
 
 #define STRIDE_RATE    1.7f     // Default walk cycle radians per unit travelled: one step covers about 1.85 units
 
@@ -35,6 +38,7 @@ void PlayerRespawn(Player *player, const World *world)
     player->velocityY = 0.0f;
     player->groundY = position.y;
     player->grounded = true;
+    player->climbing = false;
 }
 
 // Ground under the feet: the highest surface below the middle and four points around it, so plank floors
@@ -152,6 +156,67 @@ void PlayerUpdate(Player *player, const World *world, Vector3 move, bool sprint,
     player->walkPhase = fmodf(player->walkPhase + moved*player->strideRate, 2.0f*PI);
     float targetStride = (moved > 0.0001f)? (player->sprinting? 0.8f : 0.55f) : 0.0f;
     player->stride += (targetStride - player->stride)*fminf(1.0f, 10.0f*dt);
+}
+
+// Direction from the pole's axis out to the player, on the XZ plane
+static Vector2 AwayFromAxis(const Player *player, Vector3 axis)
+{
+    Vector2 away = { player->position.x - axis.x, player->position.z - axis.z };
+    float length = Vector2Length(away);
+    return (length > 0.0001f)? Vector2Scale(away, 1.0f/length) : (Vector2){ 0.0f, 1.0f };
+}
+
+void PlayerStartClimb(Player *player, Vector3 axis, float radius)
+{
+    Vector2 away = AwayFromAxis(player, axis);
+    player->climbing = true;
+    player->grounded = false;
+    player->velocityY = 0.0f;
+    player->stride = 0.0f;
+    player->position.x = axis.x + away.x*(radius + CLIMB_REACH);
+    player->position.z = axis.z + away.y*(radius + CLIMB_REACH);
+    player->position.y += 0.15f;    // Off the ground, so climbing down to it lets go
+    player->yaw = atan2f(-away.x, -away.y);
+}
+
+void PlayerClimb(Player *player, const World *world, Vector3 axis, float radius, float up, float around, float maxY, float dt)
+{
+    Vector2 away = AwayFromAxis(player, axis);
+    float distance = radius + CLIMB_REACH;
+    float angle = atan2f(away.y, away.x) + around*CLIMB_SPEED*0.6f*dt/distance;
+    float startY = player->position.y;
+
+    player->position.y = fminf(player->position.y + up*CLIMB_SPEED*dt, maxY);
+    player->position.x = axis.x + cosf(angle)*distance;
+    player->position.z = axis.z + sinf(angle)*distance;
+    player->yaw = atan2f(-cosf(angle), -sinf(angle));    // Facing the pole
+
+    float ground;
+    if (WorldGroundHeight(world, player->position.x, player->position.z, player->position.y + STEP_HEIGHT, &ground))
+    {
+        player->groundY = ground;
+        if (player->position.y <= ground)
+        {
+            // Back down on the ground
+            player->position.y = ground;
+            player->climbing = false;
+            player->grounded = true;
+        }
+    }
+
+    float climbed = fabsf(player->position.y - startY) + fabsf(around)*CLIMB_SPEED*0.6f*dt;
+    player->climbPhase = fmodf(player->climbPhase + climbed*CLIMB_RATE, 2.0f*PI);
+}
+
+void PlayerJumpOffClimb(Player *player, Vector3 axis)
+{
+    Vector2 away = AwayFromAxis(player, axis);
+    player->climbing = false;
+    player->grounded = false;
+    player->velocityY = JUMP_SPEED*0.6f;
+    player->position.x += away.x*0.4f;
+    player->position.z += away.y*0.4f;
+    player->yaw = atan2f(away.x, away.y);
 }
 
 void PlayerDrawShadow(const Player *player, float radius)

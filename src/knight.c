@@ -156,6 +156,32 @@ static void PoseParts(const Player *player, Matrix *parts)
     Matrix torsoRotation = MatrixMultiply(MatrixMultiply(MatrixRotateY(twist), MatrixRotateZ(roll)), MatrixRotateX(lean));
     parts[PART_TORSO] = Joint(pelvis, (Vector3){ 0.0f, HIP.y, 0.0f }, torsoRotation);
 
+    if (player->climbing)
+    {
+        // Hand over hand up the beanstalk: one arm reaches high while the other pulls down, and the knee on the
+        // pulling side comes up to push
+        float c = player->climbPhase;
+        parts[PART_TORSO] = Joint(MatrixIdentity(), (Vector3){ 0.0f, HIP.y, 0.0f }, MatrixRotateX(0.12f));
+        for (int i = 0; i < 2; i++)
+        {
+            bool left = (i == 0);
+            float s = sinf(c + i*PI);   // 1 = this arm at the top of its reach
+            int upperPart = left? PART_UPPER_ARM_L : PART_UPPER_ARM_R;
+            int forearmPart = left? PART_FOREARM_L : PART_FOREARM_R;
+            // The arms hang out to the sides at rest, so lift them up over the head (Z) and then toward the stalk (X)
+            float raise = (1.75f + 0.3f*s)*(left? 1.0f : -1.0f);
+            parts[upperPart] = Joint(parts[PART_TORSO], Mirror(SHOULDER, left), MatrixMultiply(MatrixRotateZ(raise), MatrixRotateX(-(0.45f + 0.25f*s))));
+            parts[forearmPart] = Joint(parts[upperPart], Mirror(ELBOW, left), MatrixRotateX(-(0.7f - 0.5f*s)));
+
+            int thighPart = left? PART_THIGH_L : PART_THIGH_R;
+            int shinPart = left? PART_SHIN_L : PART_SHIN_R;
+            float lift = 0.55f - 0.45f*s;   // Knee up when the arm on that side is pulling
+            parts[thighPart] = Joint(parts[PART_TORSO], Mirror(HIP, left), MatrixRotateX(-lift));
+            parts[shinPart] = Joint(parts[thighPart], Mirror(KNEE, left), MatrixRotateX(lift*1.6f));
+        }
+        return;
+    }
+
     for (int i = 0; i < 2; i++)
     {
         bool left = (i == 0);
@@ -215,5 +241,5 @@ void KnightDraw(Knight *knight, const Player *player)
     DrawMesh(*mesh, knight->model.materials[knight->model.meshMaterial[0]], transform);
     rlEnableBackfaceCulling();
 
-    PlayerDrawShadow(player, 0.4f);
+    if (!player->climbing || (player->position.y - player->groundY < 6.0f)) PlayerDrawShadow(player, 0.4f);
 }
