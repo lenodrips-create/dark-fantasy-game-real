@@ -37,6 +37,24 @@ void PlayerRespawn(Player *player, const World *world)
     player->grounded = true;
 }
 
+// Ground under the feet: the highest surface below the middle and four points around it, so plank floors
+// with gaps (the dock) still hold the player up
+static bool FeetGroundHeight(const World *world, float x, float z, float fromY, float *outY)
+{
+    static const float offsets[5][2] = { { 0, 0 }, { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+    bool found = false;
+    for (int i = 0; i < 5; i++)
+    {
+        float y;
+        if (WorldGroundHeight(world, x + offsets[i][0]*PLAYER_RADIUS, z + offsets[i][1]*PLAYER_RADIUS, fromY, &y))
+        {
+            if (!found || (y > *outY)) *outY = y;
+            found = true;
+        }
+    }
+    return found;
+}
+
 // Moves horizontally by (dx, dz) unless something solid is in the way or there's no ground there
 static bool TryMove(Player *player, const World *world, float dx, float dz)
 {
@@ -66,7 +84,7 @@ static bool TryMove(Player *player, const World *world, float dx, float dz)
     float x = player->position.x + dx;
     float z = player->position.z + dz;
     float ground;
-    if (!WorldGroundHeight(world, x, z, player->position.y + STEP_HEIGHT, &ground)) return false;
+    if (!FeetGroundHeight(world, x, z, player->position.y + STEP_HEIGHT, &ground)) return false;
 
     player->position.x = x;
     player->position.z = z;
@@ -99,7 +117,7 @@ void PlayerUpdate(Player *player, const World *world, Vector3 move, bool sprint,
     }
 
     float ground = 0.0f;
-    bool hasGround = WorldGroundHeight(world, player->position.x, player->position.z, player->position.y + STEP_HEIGHT, &ground);
+    bool hasGround = FeetGroundHeight(world, player->position.x, player->position.z, player->position.y + STEP_HEIGHT, &ground);
 
     if (player->grounded && jump)
     {
