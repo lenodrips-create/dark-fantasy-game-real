@@ -170,10 +170,11 @@ static void PoseParts(const Player *player, Matrix *parts)
             float s = sinf(c + i*PI);   // 1 = this arm at the top of its reach
             int upperPart = left? PART_UPPER_ARM_L : PART_UPPER_ARM_R;
             int forearmPart = left? PART_FOREARM_L : PART_FOREARM_R;
-            // The arms hang out to the sides at rest, so lift them in front (Z, then X) onto the stalk
-            float raise = (0.75f + 0.15f*s)*(left? 1.0f : -1.0f);
-            parts[upperPart] = Joint(parts[PART_TORSO], Mirror(SHOULDER, left), MatrixMultiply(MatrixRotateZ(raise), MatrixRotateX(-(1.6f + 0.6f*s))));
-            parts[forearmPart] = Joint(parts[upperPart], Mirror(ELBOW, left), MatrixRotateX(-(0.3f - 0.25f*s)));
+            // The arms hang out to the sides at rest: bring them in under the shoulders (Z), then swing them up in front
+            // of him onto the stalk (X), one reaching high while the other is low
+            float inward = left? -0.7f : 0.7f;
+            parts[upperPart] = Joint(parts[PART_TORSO], Mirror(SHOULDER, left), MatrixMultiply(MatrixRotateZ(inward), MatrixRotateX(-(2.3f + 0.7f*s))));
+            parts[forearmPart] = Joint(parts[upperPart], Mirror(ELBOW, left), MatrixRotateX(-(0.25f - 0.25f*s)));
             // Put away: shrunk to nothing inside the right hand
             if (!left) parts[PART_HALBERD] = MatrixMultiply(MatrixMultiply(MatrixScale(0.0f, 0.0f, 0.0f), MatrixTranslate(-0.75f, 1.6f, 0.0f)), parts[forearmPart]);
 
