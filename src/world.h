@@ -20,6 +20,7 @@ typedef struct World {
 
     // The actor: meshes lifted out of the level so they can walk around (the hooded figure)
     bool *isActor;          // Per mesh
+    bool *isHidden;         // Per mesh: invisible walls, solid but not drawn
     bool hasActor;
     int actorMesh;
     Vector3 actorOrigin;    // Where it stood in the map, between its feet
@@ -31,6 +32,7 @@ typedef struct World {
     // Collision: world-space triangles (raylib bakes the Blender node transforms into the meshes)
     // bucketed into a grid over the ground plane. Foliage is left out so leaves never block anything.
     Vector3 *triangles;     // Three corners per triangle
+    bool *triangleHidden;   // Per triangle: part of an invisible wall
     int triangleCount;
     int *cellStart;         // Triangles of cell c are cellItems[cellStart[c]] .. cellItems[cellStart[c + 1] - 1]
     int *cellItems;
@@ -51,8 +53,11 @@ void WorldDrawActor(const World *world, Vector3 position, float yaw, float lean,
 
 // Closest solid hit along the ray, up to maxDistance.
 RayCollision WorldRaycast(const World *world, Ray ray, float maxDistance);
+// Same, but passes through invisible walls (for the camera)
+RayCollision WorldRaycastVisible(const World *world, Ray ray, float maxDistance);
 
-// Height of the first solid surface straight below (x, fromY, z). False if there is nothing below.
+// Height of the first solid surface straight below (x, fromY, z), invisible walls aside (nobody stands on them).
+// False if there is nothing below.
 bool WorldGroundHeight(const World *world, float x, float z, float fromY, float *outY);
 
 #endif

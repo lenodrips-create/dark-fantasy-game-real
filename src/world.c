@@ -11,6 +11,7 @@
 #define GRID_CELL_SIZE 8.0f     // Collision grid cell size in world units
 #define GRID_MAX_CELLS 512      // Per axis; cells get bigger on huge maps instead
 #define BOX_COLLIDER_NAME "Fence"   // Meshes whose material name contains this collide as boxes
+#define HIDDEN_NAME "Invisible"     // Meshes whose material name contains this are solid but not drawn (walls at the water's edge)
 #define ACTOR_LEG_TOP  0.2f     // Fraction of the actor's height where its legs meet the robe
 #define ACTOR_ARM_OUT  0.18f    // Arms (sleeves, hands, whatever they hold) reach further out than this fraction of the height
 #define ACTOR_ARM_TOP  0.63f    // and sit below this fraction of the height
@@ -103,8 +104,15 @@ static const char *SKY_FS =
 // Scans the glTF JSON for materials whose alphaMode is BLEND or MASK (leaves, tree line cards).
 // raylib keeps glTF material i at model.materials[i + 1], index 0 being its default material.
 // Also finds the material called actorName and returns its raylib index in *actorMaterial, and flags materials
-// whose name contains BOX_COLLIDER_NAME in box.
-static void ScanMaterials(const char *json, int length, bool *alpha, bool *box, int materialCount, const char *actorName, int *actorMaterial)
+// whose name contains BOX_COLLIDER_NAME in box and those whose name contains HIDDEN_NAME in hidden.
+static bool NameContains(const char *s, int len, const char *part)
+{
+    int partLength = (int)strlen(part);
+    for (int k = 0; k + partLength <= len; k++) if (memcmp(s + k, part, partLength) == 0) return true;
+    return false;
+}
+
+static void ScanMaterials(const char *json, int length, bool *alpha, bool *box, bool *hidden, int materialCount, const char *actorName, int *actorMaterial)
 {
     int actorNameLength = (int)strlen(actorName);
     bool expectName = false;
@@ -128,10 +136,10 @@ static void ScanMaterials(const char *json, int length, bool *alpha, bool *box, 
             if (expectName)
             {
                 if ((len == actorNameLength) && (memcmp(s, actorName, len) == 0)) *actorMaterial = material + 1;
-                int boxNameLength = (int)strlen(BOX_COLLIDER_NAME);
-                for (int k = 0; (k + boxNameLength <= len) && (material + 1 < materialCount); k++)
+                if (material + 1 < materialCount)
                 {
-                    if (memcmp(s + k, BOX_COLLIDER_NAME, boxNameLength) == 0) { box[material + 1] = true; break; }
+                    if (NameContains(s, len, BOX_COLLIDER_NAME)) box[material + 1] = true;
+                    if (NameContains(s, len, HIDDEN_NAME)) hidden[material + 1] = true;
                 }
                 expectName = false;
             }
@@ -163,7 +171,7 @@ static void ScanMaterials(const char *json, int length, bool *alpha, bool *box, 
     }
 }
 
-static void FindMaterials(const char *path, bool *alpha, bool *box, int materialCount, const char *actorName, int *actorMaterial)
+static void FindMaterials(const char *path, bool *alpha, bool *box, bool *hidden, int materialCount, const char *actorName, int *actorMaterial)
 {
     int size = 0;
     unsigned char *file = LoadFileData(path, &size);
@@ -173,9 +181,9 @@ static void FindMaterials(const char *path, bool *alpha, bool *box, int material
     {
         // Binary glTF: 12 byte header, then the JSON chunk (length, type, data)
         unsigned int jsonLength = file[12] | (file[13] << 8) | (file[14] << 16) | ((unsigned int)file[15] << 24);
-        if (jsonLength <= (unsigned int)size - 20) ScanMaterials((const char *)file + 20, (int)jsonLength, alpha, box, materialCount, actorName, actorMaterial);
+        if (jsonLength <= (unsigned int)size - 20) ScanMaterials((const char *)file + 20, (int)jsonLength, alpha, box, hidden, materialCount, actorName, actorMaterial);
     }
-    else ScanMaterials((const char *)file, size, alpha, box, materialCount, actorName, actorMaterial);
+    else ScanMaterials((const char *)file, size, alpha, box, hidden, materialCount, actorName, actorMaterial);
 
     UnloadFileData(file);
 }
@@ -208,6 +216,7 @@ static void BuildCollisionGrid(World *world, const bool *alphaMaterial, const bo
         capacity += boxMaterial[model->meshMaterial[m]]? 12 : model->meshes[m].triangleCount;
     }
     world->triangles = malloc((capacity > 0? capacity : 1)*3*sizeof(Vector3));
+    world->triangleHidden = calloc((capacity > 0? capacity : 1), sizeof(bool));
 
     Vector2 min = { FLT_MAX, FLT_MAX };
     Vector2 max = { -FLT_MAX, -FLT_MAX };
@@ -238,6 +247,7 @@ static void BuildCollisionGrid(World *world, const bool *alphaMaterial, const bo
 
         for (int t = 0; t < mesh->triangleCount; t++, count++)
         {
+            world->triangleHidden[count] = world->isHidden[m];
             for (int k = 0; k < 3; k++)
             {
                 int v = (mesh->indices != NULL)? mesh->indices[t*3 + k] : t*3 + k;
@@ -398,11 +408,14 @@ bool WorldLoad(World *world, const char *path, const char *skyPath, const char *
 
     bool *alphaMaterial = calloc(model->materialCount, sizeof(bool));
     bool *boxMaterial = calloc(model->materialCount, sizeof(bool));
+    bool *hiddenMaterial = calloc(model->materialCount, sizeof(bool));
     int actorMaterial = -1;
-    FindMaterials(path, alphaMaterial, boxMaterial, model->materialCount, actorMaterialName, &actorMaterial);
+    FindMaterials(path, alphaMaterial, boxMaterial, hiddenMaterial, model->materialCount, actorMaterialName, &actorMaterial);
 
     // Lift the actor out of the level (the first mesh using its material)
     world->isActor = calloc(model->meshCount, sizeof(bool));
+    world->isHidden = calloc(model->meshCount, sizeof(bool));
+    for (int m = 0; m < model->meshCount; m++) world->isHidden[m] = hiddenMaterial[model->meshMaterial[m]];
     world->actorMesh = -1;
     for (int m = 0; m < model->meshCount; m++)
     {
@@ -419,6 +432,7 @@ bool WorldLoad(World *world, const char *path, const char *skyPath, const char *
     BuildCollisionGrid(world, alphaMaterial, boxMaterial);
     free(alphaMaterial);
     free(boxMaterial);
+    free(hiddenMaterial);
 
     return true;
 }
@@ -442,10 +456,12 @@ void WorldUnload(World *world)
         UnloadMaterial(world->skyMaterial);     // Also unloads the sky shader and texture
     }
     free(world->isActor);
+    free(world->isHidden);
     free(world->actorRestPositions);
     free(world->actorRestNormals);
     free(world->actorLimb);
     free(world->triangles);
+    free(world->triangleHidden);
     free(world->cellStart);
     free(world->cellItems);
     memset(world, 0, sizeof(*world));
@@ -468,7 +484,7 @@ void WorldDraw(const World *world, Camera3D camera)
     const Model *model = &world->model;
     for (int m = 0; m < model->meshCount; m++)
     {
-        if (!world->isActor[m]) DrawMesh(model->meshes[m], model->materials[model->meshMaterial[m]], model->transform);
+        if (!world->isActor[m] && !world->isHidden[m]) DrawMesh(model->meshes[m], model->materials[model->meshMaterial[m]], model->transform);
     }
     rlEnableBackfaceCulling();
 }
@@ -519,7 +535,7 @@ void WorldDrawActor(const World *world, Vector3 position, float yaw, float lean,
     rlEnableBackfaceCulling();
 }
 
-RayCollision WorldRaycast(const World *world, Ray ray, float maxDistance)
+static RayCollision Raycast(const World *world, Ray ray, float maxDistance, bool skipHidden)
 {
     RayCollision closest = { 0 };
     closest.distance = maxDistance;
@@ -537,6 +553,7 @@ RayCollision WorldRaycast(const World *world, Ray ray, float maxDistance)
             int cell = z*world->gridWidth + x;
             for (int i = world->cellStart[cell]; i < world->cellStart[cell + 1]; i++)
             {
+                if (skipHidden && world->triangleHidden[world->cellItems[i]]) continue;
                 const Vector3 *tri = &world->triangles[world->cellItems[i]*3];
                 RayCollision hit = GetRayCollisionTriangle(ray, tri[0], tri[1], tri[2]);
                 if (hit.hit && (hit.distance < closest.distance)) closest = hit;
@@ -547,10 +564,20 @@ RayCollision WorldRaycast(const World *world, Ray ray, float maxDistance)
     return closest;
 }
 
+RayCollision WorldRaycast(const World *world, Ray ray, float maxDistance)
+{
+    return Raycast(world, ray, maxDistance, false);
+}
+
+RayCollision WorldRaycastVisible(const World *world, Ray ray, float maxDistance)
+{
+    return Raycast(world, ray, maxDistance, true);
+}
+
 bool WorldGroundHeight(const World *world, float x, float z, float fromY, float *outY)
 {
     Ray ray = { { x, fromY, z }, { 0.0f, -1.0f, 0.0f } };
-    RayCollision hit = WorldRaycast(world, ray, 1000.0f);
+    RayCollision hit = Raycast(world, ray, 1000.0f, true);
     if (!hit.hit) return false;
 
     *outY = hit.point.y;

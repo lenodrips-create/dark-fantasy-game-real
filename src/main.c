@@ -112,7 +112,7 @@ static void UpdateOrbitCamera(Camera3D *camera, OrbitCamera *orbit, const World 
 
     // Pull in right away when a cliff or house gets between us and the player, ease back out after
     float allowed = orbit->distance;
-    RayCollision hit = WorldRaycast(world, (Ray){ target, dir }, orbit->distance + 0.3f);
+    RayCollision hit = WorldRaycastVisible(world, (Ray){ target, dir }, orbit->distance + 0.3f);
     if (hit.hit) allowed = fmaxf(hit.distance - 0.3f, 0.3f);
 
     if (allowed < orbit->current) orbit->current = allowed;
