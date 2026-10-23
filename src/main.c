@@ -26,12 +26,12 @@ static const Vector3 BOND_SPOT = { 245.8f, 0.0f, -252.9f };
 #define BOND_YAW    -1.369f
 #define BOND_HEIGHT 1.6f
 #define BOND_RADIUS 0.3f
-// The giant corn stalk in the field: walk into it to grab on and climb. A quarter of the way up the screen turns white.
+// The giant corn stalk in the field: walk into it to grab on and climb. A twentieth of the way up the screen turns white.
 static const Vector3 BEANSTALK_BASE = { -112.6f, 13.4f, -302.5f };
-#define BEANSTALK_RADIUS   1.2f     // Where the knight hangs on, from the stalk's middle (the stalk is about 1.2 to 1.5 thick)
+#define BEANSTALK_RADIUS   1.35f    // The stalk's surface, from its middle (its sides are 1.2 to 1.42 out)
 #define BEANSTALK_HEIGHT   150.0f
 #define BEANSTALK_GRAB     0.9f     // How close to its surface the player has to be to grab on
-#define WHITEOUT_HEIGHT    (BEANSTALK_HEIGHT*0.25f)
+#define WHITEOUT_HEIGHT    (BEANSTALK_HEIGHT*0.05f)
 #define WHITEOUT_TIME      2.0f     // Seconds for the screen to fade to white
 
 #define HOODED_FIGURE_MATERIAL "PoeCollector"   // The purple hooded figure in the map, found by its Blender material

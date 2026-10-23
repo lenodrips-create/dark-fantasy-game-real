@@ -17,7 +17,8 @@ enum {
     PART_UPPER_ARM_L,
     PART_FOREARM_L,
     PART_UPPER_ARM_R,
-    PART_FOREARM_R, // Also the halberd
+    PART_FOREARM_R,
+    PART_HALBERD,   // Moves with the right forearm, put away while climbing
     PART_COUNT
 };
 
@@ -29,6 +30,7 @@ static const Vector3 SHOULDER = { 0.52f, 2.0f, -0.05f };
 static const Vector3 ELBOW = { 0.75f, 1.78f, 0.0f };
 #define THIGH_LENGTH 0.45f      // Hip to knee
 #define SHIN_LENGTH  0.80f      // Knee to the ground
+#define CLIMB_GRIP   0.46f      // How far in front of the hips the stalk's surface is while climbing (see CLIMB_REACH)
 
 static Vector3 Mirror(Vector3 v, bool left)
 {
@@ -41,7 +43,7 @@ static unsigned char ClassifyVertex(Vector3 p)
     float ax = fabsf(p.x);
 
     // The halberd runs front to back through the right hand
-    if ((p.x < -0.6f) && (fabsf(p.z) > 0.55f)) return PART_FOREARM_R;
+    if ((p.x < -0.6f) && (fabsf(p.z) > 0.55f)) return PART_HALBERD;
 
     if ((ax >= 0.45f) && (p.y >= 1.35f) && (p.y < 2.05f))
     {
@@ -159,25 +161,29 @@ static void PoseParts(const Player *player, Matrix *parts)
     if (player->climbing)
     {
         // Hand over hand up the beanstalk: one arm reaches high while the other pulls down, and the knee on the
-        // pulling side comes up to push
+        // pulling side comes up to push. Hands and feet stay on the stalk's surface, CLIMB_GRIP in front of him.
         float c = player->climbPhase;
-        parts[PART_TORSO] = Joint(MatrixIdentity(), (Vector3){ 0.0f, HIP.y, 0.0f }, MatrixRotateX(0.12f));
+        parts[PART_TORSO] = Joint(MatrixIdentity(), (Vector3){ 0.0f, HIP.y, 0.0f }, MatrixRotateX(0.15f));
         for (int i = 0; i < 2; i++)
         {
             bool left = (i == 0);
             float s = sinf(c + i*PI);   // 1 = this arm at the top of its reach
             int upperPart = left? PART_UPPER_ARM_L : PART_UPPER_ARM_R;
             int forearmPart = left? PART_FOREARM_L : PART_FOREARM_R;
-            // The arms hang out to the sides at rest, so lift them up over the head (Z) and then toward the stalk (X)
-            float raise = (1.75f + 0.3f*s)*(left? 1.0f : -1.0f);
-            parts[upperPart] = Joint(parts[PART_TORSO], Mirror(SHOULDER, left), MatrixMultiply(MatrixRotateZ(raise), MatrixRotateX(-(0.45f + 0.25f*s))));
-            parts[forearmPart] = Joint(parts[upperPart], Mirror(ELBOW, left), MatrixRotateX(-(0.7f - 0.5f*s)));
+            // The arms hang out to the sides at rest, so lift them in front (Z, then X) onto the stalk
+            float raise = (0.75f + 0.15f*s)*(left? 1.0f : -1.0f);
+            parts[upperPart] = Joint(parts[PART_TORSO], Mirror(SHOULDER, left), MatrixMultiply(MatrixRotateZ(raise), MatrixRotateX(-(1.6f + 0.6f*s))));
+            parts[forearmPart] = Joint(parts[upperPart], Mirror(ELBOW, left), MatrixRotateX(-(0.3f - 0.25f*s)));
+            // Put away: shrunk to nothing inside the right hand
+            if (!left) parts[PART_HALBERD] = MatrixMultiply(MatrixMultiply(MatrixScale(0.0f, 0.0f, 0.0f), MatrixTranslate(-0.75f, 1.6f, 0.0f)), parts[forearmPart]);
 
             int thighPart = left? PART_THIGH_L : PART_THIGH_R;
             int shinPart = left? PART_SHIN_L : PART_SHIN_R;
-            float lift = 0.55f - 0.45f*s;   // Knee up when the arm on that side is pulling
+            // Knee up when the arm on that side is pulling; the shin bends back just enough to keep the foot on the stalk
+            float lift = 0.75f - 0.45f*s;
+            float shinTilt = asinf(Clamp((CLIMB_GRIP - THIGH_LENGTH*sinf(lift))/SHIN_LENGTH, -1.0f, 1.0f));
             parts[thighPart] = Joint(parts[PART_TORSO], Mirror(HIP, left), MatrixRotateX(-lift));
-            parts[shinPart] = Joint(parts[thighPart], Mirror(KNEE, left), MatrixRotateX(lift*1.6f));
+            parts[shinPart] = Joint(parts[thighPart], Mirror(KNEE, left), MatrixRotateX(lift - shinTilt));
         }
         return;
     }
@@ -205,6 +211,7 @@ static void PoseParts(const Player *player, Matrix *parts)
         parts[upperPart] = Joint(parts[PART_TORSO], Mirror(SHOULDER, left), MatrixRotateX(-armSwing));
         parts[forearmPart] = Joint(parts[upperPart], Mirror(ELBOW, left), MatrixRotateX(-elbowBend));
     }
+    parts[PART_HALBERD] = parts[PART_FOREARM_R];
 }
 
 void KnightDraw(Knight *knight, const Player *player)

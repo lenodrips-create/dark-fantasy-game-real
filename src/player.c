@@ -13,7 +13,7 @@
 #define TURN_RATE      12.0f
 #define FALL_LIMIT     -60.0f   // Respawn if we ever drop out of the world
 #define CLIMB_SPEED    3.0f     // Up and down the beanstalk
-#define CLIMB_REACH    0.45f    // Gap between the pole's surface and the feet while hanging on
+#define CLIMB_REACH    0.22f    // Gap between the pole's surface and the hips while hanging on (CLIMB_GRIP in knight.c)
 #define CLIMB_RATE     2.2f     // Climb cycle radians per unit climbed
 
 #define STRIDE_RATE    1.7f     // Default walk cycle radians per unit travelled: one step covers about 1.85 units
