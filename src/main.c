@@ -20,19 +20,25 @@
 #define KNIGHT_PATH "characters/Armor_Halberd.obj"
 #define MENU_PATH   "menu/opening.glb"
 #define BOND_PATH   "characters/Bond_Tuxedo.glb"
+#define CLOUD_PATH  "levels/cloud_scene.glb"
+
+// Where the climb leads: the cloud with the giant's house and the ogre. You arrive near its front edge, facing the house.
+static const Vector3 CLOUD_SPAWN = { 0.0f, 0.0f, 30.0f };
+#define CLOUD_SPAWN_YAW PI
 
 // Bond stands at the start of the dock, off to one side of the walkway, looking back toward the field
 static const Vector3 BOND_SPOT = { 245.8f, 0.0f, -252.9f };
 #define BOND_YAW    -1.369f
 #define BOND_HEIGHT 1.6f
 #define BOND_RADIUS 0.3f
-// The giant corn stalk in the field: walk into it to grab on and climb. A twentieth of the way up the screen turns white.
+// The giant corn stalk in the field: walk into it to grab on and climb. A twentieth of the way up the screen turns white
+// and you come out on the cloud.
 static const Vector3 BEANSTALK_BASE = { -112.6f, 13.4f, -302.5f };
 #define BEANSTALK_RADIUS   1.35f    // The stalk's surface, from its middle (its sides are 1.2 to 1.42 out)
 #define BEANSTALK_HEIGHT   150.0f
 #define BEANSTALK_GRAB     0.9f     // How close to its surface the player has to be to grab on
 #define WHITEOUT_HEIGHT    (BEANSTALK_HEIGHT*0.05f)
-#define WHITEOUT_TIME      2.0f     // Seconds for the screen to fade to white
+#define WHITEOUT_TIME      2.0f     // Seconds for the screen to fade to white, and back from white on the cloud
 
 #define HOODED_FIGURE_MATERIAL "PoeCollector"   // The purple hooded figure in the map, found by its Blender material
 
@@ -80,6 +86,8 @@ typedef struct Game {
     Camera3D camera;
     bool ignoreMouseDelta;  // The first delta after capturing the cursor can be a big jump
     float whiteout;         // 0..1, how far the screen has faded to white at the top of the climb
+    World cloud;            // The cloud level, loaded the first time you get there
+    bool inClouds;          // On the cloud instead of the graveyard map
 } Game;
 
 // Global so the browser's frame callback can reach it
@@ -272,16 +280,17 @@ static void UpdateDrawFrame(void)
     if (IsKeyDown(KEY_A)) move = Vector3Subtract(move, right);
     if (Vector3Length(move) > 1.0f) move = Vector3Normalize(move);
 
+    World *world = game.inClouds? &game.cloud : &game.world;
     if (IsKeyPressed(KEY_R))
     {
-        PlayerRespawn(&game.player, &game.world);
+        PlayerRespawn(&game.player, world);
         game.whiteout = 0.0f;
     }
     bool sprint = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
     Player *player = &game.player;
     Vector2 toStalk = { BEANSTALK_BASE.x - player->position.x, BEANSTALK_BASE.z - player->position.z };
     float stalkDistance = Vector2Length(toStalk);
-    if (!player->climbing && (stalkDistance < BEANSTALK_RADIUS + BEANSTALK_GRAB) && (player->position.y < BEANSTALK_BASE.y + BEANSTALK_HEIGHT) &&
+    if (!game.inClouds && !player->climbing && (stalkDistance < BEANSTALK_RADIUS + BEANSTALK_GRAB) && (player->position.y < BEANSTALK_BASE.y + BEANSTALK_HEIGHT) &&
         (Vector3Length(move) > 0.1f) && ((move.x*toStalk.x + move.z*toStalk.y) > 0.5f*stalkDistance*Vector3Length(move)))
     {
         PlayerStartClimb(player, BEANSTALK_BASE, BEANSTALK_RADIUS);
@@ -297,23 +306,39 @@ static void UpdateDrawFrame(void)
         else PlayerClimb(player, &game.world, BEANSTALK_BASE, BEANSTALK_RADIUS, up, around, BEANSTALK_BASE.y + WHITEOUT_HEIGHT, dt);
 
         if (player->climbing && (player->position.y >= BEANSTALK_BASE.y + WHITEOUT_HEIGHT - 0.01f)) game.whiteout = fminf(game.whiteout + dt/WHITEOUT_TIME, 1.0f);
+
+        // All white: come out on the cloud
+        if ((game.whiteout >= 1.0f) && (game.cloud.model.meshCount > 0 || WorldLoad(&game.cloud, CLOUD_PATH, SKY_PATH, "")))
+        {
+            game.inClouds = true;
+            world = &game.cloud;
+            PlayerInit(player, world, CLOUD_SPAWN, CLOUD_SPAWN_YAW);
+            game.orbit.yaw = CLOUD_SPAWN_YAW + PI;
+        }
     }
-    else PlayerUpdate(player, &game.world, move, sprint, IsKeyPressed(KEY_SPACE), dt);
-    if (game.world.hasActor)
+    else
+    {
+        PlayerUpdate(player, world, move, sprint, IsKeyPressed(KEY_SPACE), dt);
+        if (game.inClouds) game.whiteout = fmaxf(game.whiteout - dt/WHITEOUT_TIME, 0.0f);    // Fade in on the cloud
+    }
+    if (!game.inClouds && game.world.hasActor)
     {
         WandererUpdate(&game.hoodedFigure, &game.world, dt);
         PushApart(&game.player, KNIGHT_RADIUS, &game.hoodedFigure.body, HOODED_FIGURE_RADIUS);
     }
-    if (game.hasBond) PushApart(&game.player, KNIGHT_RADIUS, &game.bondBody, BOND_RADIUS);
-    UpdateOrbitCamera(&game.camera, orbit, &game.world, game.player.position, dt);
+    if (!game.inClouds && game.hasBond) PushApart(&game.player, KNIGHT_RADIUS, &game.bondBody, BOND_RADIUS);
+    UpdateOrbitCamera(&game.camera, orbit, world, game.player.position, dt);
 
     BeginDrawing();
         ClearBackground(WORLD_SKY_COLOR);
         BeginMode3D(game.camera);
-            WorldDraw(&game.world, game.camera);
+            WorldDraw(world, game.camera);
             KnightDraw(&game.knight, &game.player);
-            DrawHoodedFigure(&game.hoodedFigure, &game.world);
-            if (game.hasBond) DrawBond();
+            if (!game.inClouds)
+            {
+                DrawHoodedFigure(&game.hoodedFigure, &game.world);
+                if (game.hasBond) DrawBond();
+            }
         EndMode3D();
         DrawHud();
         if (game.whiteout > 0.0f) DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(WHITE, game.whiteout));
@@ -380,6 +405,7 @@ int main(void)
         if (game.inMenu) MenuUnload(&game.menu);
         if (game.hasBond) UnloadModel(game.bond);
         KnightUnload(&game.knight);
+        if (game.cloud.model.meshCount > 0) WorldUnload(&game.cloud);
         WorldUnload(&game.world);
     }
     CloseWindow();

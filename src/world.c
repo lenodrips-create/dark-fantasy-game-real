@@ -12,6 +12,7 @@
 #define GRID_MAX_CELLS 512      // Per axis; cells get bigger on huge maps instead
 #define BOX_COLLIDER_NAME "Fence"   // Meshes whose material name contains this collide as boxes
 #define HIDDEN_NAME "Invisible"     // Meshes whose material name contains this are solid but not drawn (walls at the water's edge)
+#define MIST_NAME "Mist"            // Meshes whose material name contains this are drawn see-through, after everything else
 #define ACTOR_LEG_TOP  0.2f     // Fraction of the actor's height where its legs meet the robe
 #define ACTOR_ARM_OUT  0.18f    // Arms (sleeves, hands, whatever they hold) reach further out than this fraction of the height
 #define ACTOR_ARM_TOP  0.63f    // and sit below this fraction of the height
@@ -61,15 +62,16 @@ static const char *LIT_FS =
     "uniform vec3 lightDir;\n"
     "uniform vec3 lightColor;\n"
     "uniform vec3 ambientColor;\n"
+    "uniform float alphaCutoff;\n"    // 0.5 for alpha-tested leaves and tree cards, near 0 for blended mist
     "out vec4 finalColor;\n"
     "void main()\n"
     "{\n"
     "    vec4 texel = texture(texture0, fragTexCoord)*colDiffuse*fragColor;\n"
-    "    if (texel.a < 0.5) discard;\n"  // Alpha-tested leaves and tree cards
+    "    if (texel.a < alphaCutoff) discard;\n"
     "    vec3 n = normalize(fragNormal);\n"
     "    if (!gl_FrontFacing) n = -n;\n"  // Blender materials are double sided
     "    float diffuse = max(dot(n, -lightDir), 0.0);\n"
-    "    finalColor = vec4(texel.rgb*(ambientColor + lightColor*diffuse), 1.0);\n"
+    "    finalColor = vec4(texel.rgb*(ambientColor + lightColor*diffuse), (alphaCutoff < 0.5)? texel.a : 1.0);\n"
     "}\n";
 
 // Drawn on a cube around the camera: the direction to each pixel picks the spot in the sky image,
@@ -104,7 +106,7 @@ static const char *SKY_FS =
 // Scans the glTF JSON for materials whose alphaMode is BLEND or MASK (leaves, tree line cards).
 // raylib keeps glTF material i at model.materials[i + 1], index 0 being its default material.
 // Also finds the material called actorName and returns its raylib index in *actorMaterial, and flags materials
-// whose name contains BOX_COLLIDER_NAME in box and those whose name contains HIDDEN_NAME in hidden.
+// whose name contains BOX_COLLIDER_NAME in box, HIDDEN_NAME in hidden and MIST_NAME in mist.
 static bool NameContains(const char *s, int len, const char *part)
 {
     int partLength = (int)strlen(part);
@@ -112,7 +114,7 @@ static bool NameContains(const char *s, int len, const char *part)
     return false;
 }
 
-static void ScanMaterials(const char *json, int length, bool *alpha, bool *box, bool *hidden, int materialCount, const char *actorName, int *actorMaterial)
+static void ScanMaterials(const char *json, int length, bool *alpha, bool *box, bool *hidden, bool *mist, int materialCount, const char *actorName, int *actorMaterial)
 {
     int actorNameLength = (int)strlen(actorName);
     bool expectName = false;
@@ -140,6 +142,7 @@ static void ScanMaterials(const char *json, int length, bool *alpha, bool *box, 
                 {
                     if (NameContains(s, len, BOX_COLLIDER_NAME)) box[material + 1] = true;
                     if (NameContains(s, len, HIDDEN_NAME)) hidden[material + 1] = true;
+                    if (NameContains(s, len, MIST_NAME)) mist[material + 1] = true;
                 }
                 expectName = false;
             }
@@ -171,7 +174,7 @@ static void ScanMaterials(const char *json, int length, bool *alpha, bool *box, 
     }
 }
 
-static void FindMaterials(const char *path, bool *alpha, bool *box, bool *hidden, int materialCount, const char *actorName, int *actorMaterial)
+static void FindMaterials(const char *path, bool *alpha, bool *box, bool *hidden, bool *mist, int materialCount, const char *actorName, int *actorMaterial)
 {
     int size = 0;
     unsigned char *file = LoadFileData(path, &size);
@@ -181,9 +184,9 @@ static void FindMaterials(const char *path, bool *alpha, bool *box, bool *hidden
     {
         // Binary glTF: 12 byte header, then the JSON chunk (length, type, data)
         unsigned int jsonLength = file[12] | (file[13] << 8) | (file[14] << 16) | ((unsigned int)file[15] << 24);
-        if (jsonLength <= (unsigned int)size - 20) ScanMaterials((const char *)file + 20, (int)jsonLength, alpha, box, hidden, materialCount, actorName, actorMaterial);
+        if (jsonLength <= (unsigned int)size - 20) ScanMaterials((const char *)file + 20, (int)jsonLength, alpha, box, hidden, mist, materialCount, actorName, actorMaterial);
     }
-    else ScanMaterials((const char *)file, size, alpha, box, hidden, materialCount, actorName, actorMaterial);
+    else ScanMaterials((const char *)file, size, alpha, box, hidden, mist, materialCount, actorName, actorMaterial);
 
     UnloadFileData(file);
 }
@@ -376,6 +379,9 @@ bool WorldLoad(World *world, const char *path, const char *skyPath, const char *
     SetShaderValue(world->shader, GetShaderLocation(world->shader, "lightDir"), &lightDir, SHADER_UNIFORM_VEC3);
     SetShaderValue(world->shader, GetShaderLocation(world->shader, "lightColor"), &LIGHT_COLOR, SHADER_UNIFORM_VEC3);
     SetShaderValue(world->shader, GetShaderLocation(world->shader, "ambientColor"), &AMBIENT_COLOR, SHADER_UNIFORM_VEC3);
+    world->alphaCutoffLoc = GetShaderLocation(world->shader, "alphaCutoff");
+    float cutoff = 0.5f;
+    SetShaderValue(world->shader, world->alphaCutoffLoc, &cutoff, SHADER_UNIFORM_FLOAT);
 
     // Sky (optional: without the image the clear color shows instead)
     world->skyTexture = LoadTexture(skyPath);
@@ -409,13 +415,19 @@ bool WorldLoad(World *world, const char *path, const char *skyPath, const char *
     bool *alphaMaterial = calloc(model->materialCount, sizeof(bool));
     bool *boxMaterial = calloc(model->materialCount, sizeof(bool));
     bool *hiddenMaterial = calloc(model->materialCount, sizeof(bool));
+    bool *mistMaterial = calloc(model->materialCount, sizeof(bool));
     int actorMaterial = -1;
-    FindMaterials(path, alphaMaterial, boxMaterial, hiddenMaterial, model->materialCount, actorMaterialName, &actorMaterial);
+    FindMaterials(path, alphaMaterial, boxMaterial, hiddenMaterial, mistMaterial, model->materialCount, actorMaterialName, &actorMaterial);
 
     // Lift the actor out of the level (the first mesh using its material)
     world->isActor = calloc(model->meshCount, sizeof(bool));
     world->isHidden = calloc(model->meshCount, sizeof(bool));
-    for (int m = 0; m < model->meshCount; m++) world->isHidden[m] = hiddenMaterial[model->meshMaterial[m]];
+    world->isMist = calloc(model->meshCount, sizeof(bool));
+    for (int m = 0; m < model->meshCount; m++)
+    {
+        world->isHidden[m] = hiddenMaterial[model->meshMaterial[m]];
+        world->isMist[m] = mistMaterial[model->meshMaterial[m]];
+    }
     world->actorMesh = -1;
     for (int m = 0; m < model->meshCount; m++)
     {
@@ -433,6 +445,7 @@ bool WorldLoad(World *world, const char *path, const char *skyPath, const char *
     free(alphaMaterial);
     free(boxMaterial);
     free(hiddenMaterial);
+    free(mistMaterial);
 
     return true;
 }
@@ -457,6 +470,7 @@ void WorldUnload(World *world)
     }
     free(world->isActor);
     free(world->isHidden);
+    free(world->isMist);
     free(world->actorRestPositions);
     free(world->actorRestNormals);
     free(world->actorLimb);
@@ -484,8 +498,22 @@ void WorldDraw(const World *world, Camera3D camera)
     const Model *model = &world->model;
     for (int m = 0; m < model->meshCount; m++)
     {
-        if (!world->isActor[m] && !world->isHidden[m]) DrawMesh(model->meshes[m], model->materials[model->meshMaterial[m]], model->transform);
+        if (!world->isActor[m] && !world->isHidden[m] && !world->isMist[m]) DrawMesh(model->meshes[m], model->materials[model->meshMaterial[m]], model->transform);
     }
+
+    // Mist last, blended over everything behind it and not hiding what's further back
+    float cutoff = 0.01f;
+    SetShaderValue(world->shader, world->alphaCutoffLoc, &cutoff, SHADER_UNIFORM_FLOAT);
+    rlDisableDepthMask();
+    BeginBlendMode(BLEND_ALPHA);
+    for (int m = 0; m < model->meshCount; m++)
+    {
+        if (world->isMist[m]) DrawMesh(model->meshes[m], model->materials[model->meshMaterial[m]], model->transform);
+    }
+    EndBlendMode();
+    rlEnableDepthMask();
+    cutoff = 0.5f;
+    SetShaderValue(world->shader, world->alphaCutoffLoc, &cutoff, SHADER_UNIFORM_FLOAT);
     rlEnableBackfaceCulling();
 }
 

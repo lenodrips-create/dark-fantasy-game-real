@@ -21,6 +21,8 @@ typedef struct World {
     // The actor: meshes lifted out of the level so they can walk around (the hooded figure)
     bool *isActor;          // Per mesh
     bool *isHidden;         // Per mesh: invisible walls, solid but not drawn
+    bool *isMist;           // Per mesh: drawn see-through after everything else
+    int alphaCutoffLoc;     // Shader uniform: alpha below which pixels are dropped
     bool hasActor;
     int actorMesh;
     Vector3 actorOrigin;    // Where it stood in the map, between its feet
