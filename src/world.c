@@ -10,6 +10,7 @@
 
 #define GRID_CELL_SIZE 8.0f     // Collision grid cell size in world units
 #define GRID_MAX_CELLS 512      // Per axis; cells get bigger on huge maps instead
+#define BOX_COLLIDER_NAME "Fence"   // Meshes whose material name contains this collide as boxes
 #define ACTOR_LEG_TOP  0.2f     // Fraction of the actor's height where its legs meet the robe
 #define ACTOR_ARM_OUT  0.18f    // Arms (sleeves, hands, whatever they hold) reach further out than this fraction of the height
 #define ACTOR_ARM_TOP  0.63f    // and sit below this fraction of the height
@@ -101,8 +102,9 @@ static const char *SKY_FS =
 
 // Scans the glTF JSON for materials whose alphaMode is BLEND or MASK (leaves, tree line cards).
 // raylib keeps glTF material i at model.materials[i + 1], index 0 being its default material.
-// Also finds the material called actorName and returns its raylib index in *actorMaterial.
-static void ScanMaterials(const char *json, int length, bool *alpha, int materialCount, const char *actorName, int *actorMaterial)
+// Also finds the material called actorName and returns its raylib index in *actorMaterial, and flags materials
+// whose name contains BOX_COLLIDER_NAME in box.
+static void ScanMaterials(const char *json, int length, bool *alpha, bool *box, int materialCount, const char *actorName, int *actorMaterial)
 {
     int actorNameLength = (int)strlen(actorName);
     bool expectName = false;
@@ -126,6 +128,11 @@ static void ScanMaterials(const char *json, int length, bool *alpha, int materia
             if (expectName)
             {
                 if ((len == actorNameLength) && (memcmp(s, actorName, len) == 0)) *actorMaterial = material + 1;
+                int boxNameLength = (int)strlen(BOX_COLLIDER_NAME);
+                for (int k = 0; (k + boxNameLength <= len) && (material + 1 < materialCount); k++)
+                {
+                    if (memcmp(s + k, BOX_COLLIDER_NAME, boxNameLength) == 0) { box[material + 1] = true; break; }
+                }
                 expectName = false;
             }
             else if (expectAlphaMode)
@@ -156,7 +163,7 @@ static void ScanMaterials(const char *json, int length, bool *alpha, int materia
     }
 }
 
-static void FindMaterials(const char *path, bool *alpha, int materialCount, const char *actorName, int *actorMaterial)
+static void FindMaterials(const char *path, bool *alpha, bool *box, int materialCount, const char *actorName, int *actorMaterial)
 {
     int size = 0;
     unsigned char *file = LoadFileData(path, &size);
@@ -166,9 +173,9 @@ static void FindMaterials(const char *path, bool *alpha, int materialCount, cons
     {
         // Binary glTF: 12 byte header, then the JSON chunk (length, type, data)
         unsigned int jsonLength = file[12] | (file[13] << 8) | (file[14] << 16) | ((unsigned int)file[15] << 24);
-        if (jsonLength <= (unsigned int)size - 20) ScanMaterials((const char *)file + 20, (int)jsonLength, alpha, materialCount, actorName, actorMaterial);
+        if (jsonLength <= (unsigned int)size - 20) ScanMaterials((const char *)file + 20, (int)jsonLength, alpha, box, materialCount, actorName, actorMaterial);
     }
-    else ScanMaterials((const char *)file, size, alpha, materialCount, actorName, actorMaterial);
+    else ScanMaterials((const char *)file, size, alpha, box, materialCount, actorName, actorMaterial);
 
     UnloadFileData(file);
 }
@@ -190,14 +197,15 @@ static void CellRange(const World *world, float minX, float minZ, float maxX, fl
 // Copies every solid triangle (foliage excluded) into a flat list and buckets it into a grid over the
 // XZ plane, so a ray only tests the triangles near it no matter how big the map gets.
 // The actor moves around, so it is left out too.
-static void BuildCollisionGrid(World *world, const bool *alphaMaterial)
+static void BuildCollisionGrid(World *world, const bool *alphaMaterial, const bool *boxMaterial)
 {
     const Model *model = &world->model;
 
     int capacity = 0;
     for (int m = 0; m < model->meshCount; m++)
     {
-        if (!alphaMaterial[model->meshMaterial[m]] && !world->isActor[m]) capacity += model->meshes[m].triangleCount;
+        if (alphaMaterial[model->meshMaterial[m]] || world->isActor[m]) continue;
+        capacity += boxMaterial[model->meshMaterial[m]]? 12 : model->meshes[m].triangleCount;
     }
     world->triangles = malloc((capacity > 0? capacity : 1)*3*sizeof(Vector3));
 
@@ -208,6 +216,25 @@ static void BuildCollisionGrid(World *world, const bool *alphaMaterial)
     {
         const Mesh *mesh = &model->meshes[m];
         if (alphaMaterial[model->meshMaterial[m]] || world->isActor[m] || (mesh->vertices == NULL)) continue;
+
+        if (boxMaterial[model->meshMaterial[m]])
+        {
+            // Thin things like fence rails collide as their whole bounding box, so nothing slips between them
+            BoundingBox b = GetMeshBoundingBox(*mesh);
+            Vector3 c[8];
+            for (int k = 0; k < 8; k++) c[k] = (Vector3){ (k & 1)? b.max.x : b.min.x, (k & 2)? b.max.y : b.min.y, (k & 4)? b.max.z : b.min.z };
+            static const int faces[6][4] = { { 0, 1, 3, 2 }, { 4, 6, 7, 5 }, { 0, 4, 5, 1 }, { 2, 3, 7, 6 }, { 0, 2, 6, 4 }, { 1, 5, 7, 3 } };
+            for (int f = 0; f < 6; f++)
+            {
+                const int *q = faces[f];
+                Vector3 quad[6] = { c[q[0]], c[q[1]], c[q[2]], c[q[0]], c[q[2]], c[q[3]] };
+                for (int k = 0; k < 6; k++) world->triangles[count*3 + k] = quad[k];
+                count += 2;
+            }
+            min = Vector2Min(min, (Vector2){ b.min.x, b.min.z });
+            max = Vector2Max(max, (Vector2){ b.max.x, b.max.z });
+            continue;
+        }
 
         for (int t = 0; t < mesh->triangleCount; t++, count++)
         {
@@ -370,8 +397,9 @@ bool WorldLoad(World *world, const char *path, const char *skyPath, const char *
     }
 
     bool *alphaMaterial = calloc(model->materialCount, sizeof(bool));
+    bool *boxMaterial = calloc(model->materialCount, sizeof(bool));
     int actorMaterial = -1;
-    FindMaterials(path, alphaMaterial, model->materialCount, actorMaterialName, &actorMaterial);
+    FindMaterials(path, alphaMaterial, boxMaterial, model->materialCount, actorMaterialName, &actorMaterial);
 
     // Lift the actor out of the level (the first mesh using its material)
     world->isActor = calloc(model->meshCount, sizeof(bool));
@@ -388,8 +416,9 @@ bool WorldLoad(World *world, const char *path, const char *skyPath, const char *
     }
     if (world->hasActor) SetupActorLimbs(world);
 
-    BuildCollisionGrid(world, alphaMaterial);
+    BuildCollisionGrid(world, alphaMaterial, boxMaterial);
     free(alphaMaterial);
+    free(boxMaterial);
 
     return true;
 }

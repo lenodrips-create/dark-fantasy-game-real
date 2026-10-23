@@ -19,8 +19,8 @@
 #define KNIGHT_PATH "characters/Armor_Halberd.obj"
 #define HOODED_FIGURE_MATERIAL "PoeCollector"   // The purple hooded figure in the map, found by its Blender material
 
-// Middle aisle of the graveyard, between the rows of graves, facing north toward the cliff gap
-static const Vector3 SPAWN_POINT = { 0.0f, 0.0f, 14.0f };
+// South end of the middle aisle, facing north toward the dead tree, the graves and the fenced entrance
+static const Vector3 SPAWN_POINT = { 0.0f, 0.0f, 24.0f };
 #define SPAWN_YAW PI
 
 // The hooded figure strolls around the graveyard ground (x, z, width, depth), starting where it stands in the map

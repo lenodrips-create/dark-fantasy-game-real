@@ -57,14 +57,20 @@ Export from Blender with **File > Export > glTF 2.0**, format **glTF Binary (.gl
 
 - Use **+Y Up** (the exporter default). Object positions, rotations and scales are applied when the map loads.
 - Every mesh is solid: the player stands on it and bumps into it. Materials using **Alpha Blend** or **Alpha Clip** (leaves, tree line cards) are treated as foliage and don't block anything.
-- The spawn point is `SPAWN_POINT` at the top of `src/main.c`. It's currently the middle aisle of the graveyard, facing north toward the cliff gap.
-- `levels/GroundWithHills.glb` was changed after export: the graveyard was widened (ground 28 units across instead of 14, cliffs moved out to match, graves and trees spread out), and all 12 gravestones were replaced with the `Gravestone.obj` model (1.8 units tall, "R.I.P" side facing north, over the dirt of each grave). Your Blender file has neither change, so a fresh export brings back the old graveyard unless you make them in Blender too.
+- The spawn point is `SPAWN_POINT` at the top of `src/main.c`. It's currently the south end of the middle aisle, facing north toward the dead tree and the fenced entrance.
+- Meshes whose material name contains `Fence` collide as solid boxes, so nothing slips between their thin rails.
+- `levels/GroundWithHills.glb` was changed after export: the graveyard was widened (ground 28 units across instead of 14, cliffs moved out to match, graves and trees spread out), all 12 gravestones were replaced with the `Gravestone.obj` model (1.8 units tall, "R.I.P" side facing north, over the dirt of each grave), a dead tree (4 units tall) was added in the middle of the graves, and a fence with a 4-unit gap in the middle was added across the graveyard near the entrance (10 segments). Your Blender file has none of these changes, so a fresh export brings back the old graveyard unless you make them in Blender too.
 
 ## Characters
 
 - **The knight** (`characters/Armor_Halberd.obj`, textured by `Armor_Halberd.png` through `Armor_Halberd.mtl`) is 1.4 units tall. The model has no skeleton, so `src/knight.c` splits its vertices into torso, thighs, shins, upper arms and forearms (the halberd goes with the right hand) and poses them with joint rotations every frame, the way N64-era characters were animated. The split and the joint positions are measured from this model, so a different model needs new numbers there.
 - **The walk** is modeled on Banjo's run in Banjo-Kazooie (Mumbo's Mountain): a forward lean, big quick strides with a high knee lift and a kick back, bent arms pumping against the legs, a bounce on every step and a side-to-side roll. The shoulders turn against the hips with every step, without rocking side to side. The halberd arm moves less so the weapon stays roughly level. Steps are slow and long, about 1.85 units each. It's hand-built from watching the clip, not extracted from the video.
 - **The hooded figure** is the `Figure` object from the Blender map. The game finds it by its material (`PoeCollector`), lifts it out of the level and makes it stroll between random spots on the graveyard ground, waiting a few seconds at each and picking somewhere else if a grave or tree blocks it (`src/wanderer.c`). It walks slowly with small, quick steps on its two thin legs and swings its arms against them (the staff arm less). Its legs (below the robe) and arms (sleeves, hands and staff) are split off from the rest of the mesh and swung from the hips and shoulders. The knight can't walk through it.
+
+## Credits
+
+- "Dry tree Vurvur House 5" by Nelamon (https://sketchfab.com/3d-models/dry-tree-vurvur-house-5-0964eecc8454481fb6ea3230c7714f0a), CC BY-NC 4.0: credit required, no commercial use.
+- "Withe Fence" by adam127 (https://sketchfab.com/3d-models/withe-fence-4ce8036662944c239cd9be02d0b93f2d), CC BY 4.0: credit required.
 
 ## Sky
 
