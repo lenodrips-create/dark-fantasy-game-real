@@ -30,6 +30,7 @@ static const Vector3 SHOULDER = { 0.52f, 2.0f, -0.05f };
 static const Vector3 ELBOW = { 0.75f, 1.78f, 0.0f };
 #define THIGH_LENGTH 0.45f      // Hip to knee
 #define SHIN_LENGTH  0.80f      // Knee to the ground
+static const Vector3 HAND_R = { -0.75f, 1.6f, 0.0f };   // Right hand, where the halberd's shaft passes through it
 #define CLIMB_GRIP   0.46f      // How far in front of the hips the stalk's surface is while climbing (see CLIMB_REACH)
 
 static Vector3 Mirror(Vector3 v, bool left)
@@ -125,7 +126,7 @@ static Vector3 RotateOnly(Vector3 v, Matrix m)
 // Walk cycle modeled on Banjo's in Banjo-Kazooie: big quick strides with a high knee lift and a kick back,
 // leaning into the run, bent arms pumping against the legs, a bounce on every step and a side-to-side roll.
 // Swinging forward is a negative rotation around X because the model faces +Z.
-static void PoseParts(const Player *player, Matrix *parts)
+static void PoseParts(const Player *player, bool halberdPutAway, Matrix *parts)
 {
     float swing = player->stride;   // 0 standing still, 0.55 walking, 0.8 sprinting
     float phase = player->walkPhase;
@@ -176,7 +177,7 @@ static void PoseParts(const Player *player, Matrix *parts)
             parts[upperPart] = Joint(parts[PART_TORSO], Mirror(SHOULDER, left), MatrixMultiply(MatrixRotateZ(inward), MatrixRotateX(-(2.3f + 0.7f*s))));
             parts[forearmPart] = Joint(parts[upperPart], Mirror(ELBOW, left), MatrixRotateX(-(0.25f - 0.25f*s)));
             // Put away: shrunk to nothing inside the right hand
-            if (!left) parts[PART_HALBERD] = MatrixMultiply(MatrixMultiply(MatrixScale(0.0f, 0.0f, 0.0f), MatrixTranslate(-0.75f, 1.6f, 0.0f)), parts[forearmPart]);
+            if (!left) parts[PART_HALBERD] = MatrixMultiply(MatrixMultiply(MatrixScale(0.0f, 0.0f, 0.0f), MatrixTranslate(HAND_R.x, HAND_R.y, HAND_R.z)), parts[forearmPart]);
 
             int thighPart = left? PART_THIGH_L : PART_THIGH_R;
             int shinPart = left? PART_SHIN_L : PART_SHIN_R;
@@ -213,12 +214,13 @@ static void PoseParts(const Player *player, Matrix *parts)
         parts[forearmPart] = Joint(parts[upperPart], Mirror(ELBOW, left), MatrixRotateX(-elbowBend));
     }
     parts[PART_HALBERD] = parts[PART_FOREARM_R];
+    if (halberdPutAway) parts[PART_HALBERD] = MatrixMultiply(MatrixMultiply(MatrixScale(0.0f, 0.0f, 0.0f), MatrixTranslate(HAND_R.x, HAND_R.y, HAND_R.z)), parts[PART_FOREARM_R]);
 }
 
 void KnightDraw(Knight *knight, const Player *player)
 {
     Matrix parts[PART_COUNT];
-    PoseParts(player, parts);
+    PoseParts(player, knight->halberdPutAway, parts);
 
     Mesh *mesh = &knight->model.meshes[0];
     for (int i = 0; i < mesh->vertexCount; i++)
@@ -243,6 +245,7 @@ void KnightDraw(Knight *knight, const Player *player)
     Matrix transform = MatrixMultiply(MatrixTranslate(0.0f, -knight->footY, 0.0f), MatrixScale(s, s, s));
     transform = MatrixMultiply(transform, MatrixRotateY(player->yaw));
     transform = MatrixMultiply(transform, MatrixTranslate(player->position.x, player->position.y, player->position.z));
+    knight->rightHand = MatrixMultiply(parts[PART_FOREARM_R], transform);
 
     // Parts of the armor and the halberd blade are single sided
     rlDisableBackfaceCulling();
@@ -250,4 +253,15 @@ void KnightDraw(Knight *knight, const Player *player)
     rlEnableBackfaceCulling();
 
     if (!player->climbing || (player->position.y - player->groundY < 6.0f)) PlayerDrawShadow(player, 0.4f);
+}
+
+Matrix KnightHandTransform(const Knight *knight, float gripY)
+{
+    // Item units are world units; the knight's model units are 1/scale of them. Its +Y goes back along the arm (-Z),
+    // so a shovel's blade points forward and down like the halberd's
+    float s = 1.0f/knight->scale;
+    Matrix local = MatrixMultiply(MatrixTranslate(0.0f, -gripY, 0.0f), MatrixScale(s, s, s));
+    local = MatrixMultiply(local, MatrixRotateX(-PI/2.0f + 0.9f));
+    local = MatrixMultiply(local, MatrixTranslate(HAND_R.x, HAND_R.y, HAND_R.z));
+    return MatrixMultiply(local, knight->rightHand);
 }

@@ -17,6 +17,8 @@ The game opens on `menu/opening.glb`: the camera eases in on the treasure chest 
 | **Mouse wheel** | Zoom in / out |
 | **Shift** | Sprint |
 | **Space** | Jump |
+| **E** | Pick up (the shovel in the graveyard) |
+| **1 / 2** | Hold the sword / the shovel |
 | **Walk into the beanstalk** | Grab on and climb: **W** / **S** up and down, **A** / **D** around it, **Space** to let go |
 | **R** | Back to the spawn point |
 | **Esc** | Free the mouse; press again to quit (click to grab the mouse again) |
@@ -69,7 +71,11 @@ Export from Blender with **File > Export > glTF 2.0**, format **glTF Binary (.gl
 
 ## The cloud
 
-`levels/cloud_scene.glb` is the level at the top of the beanstalk: a flat, solid cloud 200 units across (the cloud texture repeated, with a soft wavy rim) and soft mist 16 units below it. At its back stands a huge Japanese-style house (`vta8.obj` with its ten textures, 30 units tall) with its door swung open. Four plank steps (the same `Shape.743.bmp` planks as the dock) lead up to the porch, and you can walk inside: the room has a plank floor and is lit from inside (warm plaster walls). It's furnished with the fireplace, the bed, the armchair and the rug from a Banjo's house model, scaled up for the giant: the fireplace stands in the middle of the back wall facing the door (its chimney comes out through the roof), the bed is along the left wall, the armchair faces the fire and the round green rug lies in front of it. They're solid and lamplit like the room. The ogre (`36.SHP_posed.obj`, 6.5 units tall, just under the doorway) lies asleep in the bed on its back, head on the pillow, under a blanket in the bed's own blue check that's shaped over its body. You arrive near the front edge facing the house. The house and the ogre are solid, and invisible walls just inside the cloud's rim keep you from walking off. R puts you back at the cloud's spawn. Materials whose name contains `Mist` are drawn see-through after everything else (the rest of the game draws alpha as cut-outs). Materials whose name contains `Lamplit` are drawn at full brightness instead of moonlit, for indoors.
+`levels/cloud_scene.glb` is the level at the top of the beanstalk: a flat, solid cloud 200 units across (the cloud texture repeated, with a soft wavy rim) and soft mist 16 units below it. At its back stands a huge Japanese-style house (`vta8.obj` with its ten textures, 30 units tall) with its door swung open. Four plank steps (the same `Shape.743.bmp` planks as the dock) lead up to the porch, and you can walk inside: the room has a plank floor and is lit from inside (warm plaster walls). It's furnished with the fireplace, the bed, the armchair and the rug from a Banjo's house model, scaled up for the giant: the fireplace stands in the middle of the back wall facing the door (its chimney comes out through the roof), the bed is along the left wall, the armchair faces the fire and the round green rug lies in front of it. They're solid and lamplit like the room. The ogre (`36.SHP_posed.obj`, 6.5 units tall, just under the doorway) lies asleep in the bed on its back, head on the pillow, under a blanket in the bed's own blue check that's shaped over its body, with cartoon Zzz floating up from it. You arrive near the front edge facing the house. The house and the ogre are solid, and invisible walls just inside the cloud's rim keep you from walking off. R puts you back at the cloud's spawn. Materials whose name contains `Mist` are drawn see-through after everything else (the rest of the game draws alpha as cut-outs). Materials whose name contains `Lamplit` are drawn at full brightness instead of moonlit, for indoors.
+
+## Items
+
+The item bar is in the top right corner (`ui/hotbar.png`, the slot frame made black). The first slot holds the sword: the knight's halberd. A low-poly shovel stands stuck in the ground in the graveyard, a few steps east of the spawn point (always the same place, `SHOVEL_SPOT` in `src/main.c`); walk up to it and press E to put it in the second slot and in his hand. 1 and 2 switch between them, and he carries whichever is selected (`src/items.c` draws the shovel and the bar).
 
 ## Characters
 
